@@ -671,6 +671,13 @@ defmodule EthereumJSONRPC.Transaction do
       do: {key, quantity_or_nil && quantity_to_integer(quantity_or_nil)}
   end
 
+  # MIDL-specific fields
+  if Application.compile_env(:explorer, :chain_type) == :midl do
+    defp entry_to_elixir({key, value})
+         when key in ~w(btcTxHash),
+         do: {key, value}
+  end
+
   defp entry_to_elixir(_) do
     {:ignore, :ignore}
   end
