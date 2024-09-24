@@ -316,11 +316,12 @@ defmodule ConfigHelper do
     "suave",
     "zetachain",
     "zksync",
-    "celo"
+    "celo",
+    "midl"
   ]
 
   @spec chain_type() :: atom() | nil
-  def chain_type, do: parse_catalog_value("CHAIN_TYPE", @supported_chain_types, true, "default")
+  def chain_type, do: parse_catalog_value("CHAIN_TYPE", @supported_chain_types, true, "midl")
 
   @supported_modes ["all", "indexer", "api"]
 
