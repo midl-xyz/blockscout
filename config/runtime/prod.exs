@@ -68,6 +68,12 @@ config :explorer, Explorer.Repo.BridgedTokens,
   pool_size: 1,
   ssl: ExplorerConfigHelper.ssl_enabled?()
 
+# Configures MIDL database
+config :explorer, Explorer.Repo.Midl,
+  url: System.get_env("DATABASE_URL"),
+  pool_size: 1,
+  ssl: ExplorerConfigHelper.ssl_enabled?()
+
 # Configures Optimism database
 config :explorer, Explorer.Repo.Optimism,
   url: System.get_env("DATABASE_URL"),
