@@ -396,7 +396,8 @@ defmodule Explorer.Chain.Transaction do
              :v,
              :status,
              :value,
-             :revert_reason
+             :revert_reason,
+             :btc_tx_hash
            ]}
 
   @derive {Jason.Encoder,
@@ -417,7 +418,8 @@ defmodule Explorer.Chain.Transaction do
              :v,
              :status,
              :value,
-             :revert_reason
+             :revert_reason,
+             :btc_tx_hash
            ]}
 
   @typedoc """
