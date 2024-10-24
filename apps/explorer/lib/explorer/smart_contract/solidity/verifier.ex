@@ -155,14 +155,30 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
   def evaluate_authenticity_via_multi_part_files(address_hash, params, files) do
     {creation_tx_input, deployed_bytecode, verifier_metadata} = fetch_data_for_verification(address_hash)
 
+    Logger.info("Fetched creation_tx_input: #{inspect(creation_tx_input)}")
+    Logger.info("Fetched deployed_bytecode: #{inspect(deployed_bytecode)}")
+    Logger.info("Fetched verifier_metadata: #{inspect(verifier_metadata)}")
+    prepared_data =
     %{}
     |> prepare_bytecode_for_microservice(creation_tx_input, deployed_bytecode)
+
+    Logger.info("Prepared data for microservice: #{inspect(prepared_data)}")
+
+    prepared_data_with_files =
+    prepared_data
     |> Map.put("sourceFiles", files)
     |> Map.put("libraries", params["external_libraries"])
     |> Map.put("optimizationRuns", prepare_optimization_runs(params["optimization"], params["optimization_runs"]))
     |> Map.put("evmVersion", Map.get(params, "evm_version", "default"))
     |> Map.put("compilerVersion", params["compiler_version"])
-    |> RustVerifierInterface.verify_multi_part(verifier_metadata)
+
+    Logger.info("Data after adding files and libraries: #{inspect(prepared_data_with_files)}")
+
+    result = RustVerifierInterface.verify_multi_part(prepared_data_with_files, verifier_metadata)
+
+    Logger.info("Verification result: #{inspect(result)}")
+
+  result
   end
 
   defp verify(address_hash, params, json_input) do
