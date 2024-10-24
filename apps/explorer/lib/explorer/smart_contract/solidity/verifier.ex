@@ -178,7 +178,7 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
 
     Logger.info("Verification result: #{inspect(result)}")
 
-  result
+    result
   end
 
   defp verify(address_hash, params, json_input) do
