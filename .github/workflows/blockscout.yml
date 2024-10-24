@@ -3,7 +3,7 @@ name: blockscout
 on:
   push:
     branches:
-      - main
+      - master
   workflow_dispatch:
 
 jobs:
@@ -25,6 +25,5 @@ jobs:
             cd blockscout-backend/
             sudo git pull
             mix compile --force
-            screen -dmS blockscout
-            tail -1 env.sh | sh
+            screen -dmS blockscout tail -1 env.sh | sh
           EOF
