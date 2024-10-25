@@ -24,12 +24,13 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
             } = body,
             metadata
           ) do
+        Logger.info("isError here 1?")
         Logger.info("URL: #{inspect(solidity_multiple_files_verification_url())}")
         Logger.info("body: #{inspect(body)}")
         Logger.info("metadata: #{inspect(metadata)}")
         Logger.info("append_metadata: #{inspect(metadata)}")
         http_post_request(solidity_multiple_files_verification_url(), append_metadata(body, metadata), true)
-        Logger.info("isError here?")
+        Logger.info("isError here")
       end
 
       def verify_standard_json_input(
@@ -222,16 +223,10 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
 
       def vyper_versions_list_url, do: base_api_url() <> "/verifier/vyper/versions"
 
-      def base_api_url do
-        base_api = "#{base_url()}/api/v2"
-        Logger.info("Base API URL: #{base_api}")
-        base_api
-      end
+      def base_api_url, do: "#{base_url()}" <> "/api/v2"
 
       def base_url do
-        url = Microservice.base_url(Explorer.SmartContract.RustVerifierInterfaceBehaviour)
-        Logger.info("Base URL: #{url}")
-        url
+        Microservice.base_url(Explorer.SmartContract.RustVerifierInterfaceBehaviour)
       end
 
       def enabled?, do: Application.get_env(:explorer, Explorer.SmartContract.RustVerifierInterfaceBehaviour)[:enabled]
