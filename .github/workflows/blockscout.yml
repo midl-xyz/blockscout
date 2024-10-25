@@ -27,5 +27,5 @@ jobs:
             . /root/.asdf/asdf.sh
             mix compile --force
             screen -S blockscout -X quit || true
-            tail -1 env.sh | sh
+            screen -dmS blockscout bash -c "tail -1 /home/ubuntu/blockscout-backend/env.sh | sh"
           EOF
