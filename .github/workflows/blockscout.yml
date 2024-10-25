@@ -23,6 +23,7 @@ jobs:
             sudo -s
             git pull
             git checkout midl
+            source /root/.bashrc
             mix compile --force
             screen -S blockscout -X quit
             sleep 5
