@@ -51,9 +51,9 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
   defp evaluate_authenticity_inner(true, address_hash, params) do
     Logger.info("Verifier enabled. Proceeding with Rust verifier for address: #{address_hash}")
     {creation_tx_input, deployed_bytecode, verifier_metadata} = fetch_data_for_verification(address_hash)
-    Logger.info("Fetched creation transaction input: #{inspect(creation_tx_input)}")
-    Logger.info("Fetched deployed bytecode: #{inspect(deployed_bytecode)}")
-    Logger.info("Fetched verifier metadata: #{inspect(verifier_metadata)}")
+    #Logger.info("Fetched creation transaction input: #{inspect(creation_tx_input)}")
+    #Logger.info("Fetched deployed bytecode: #{inspect(deployed_bytecode)}")
+    #Logger.info("Fetched verifier metadata: #{inspect(verifier_metadata)}")
 
     prepared_data =
     %{}

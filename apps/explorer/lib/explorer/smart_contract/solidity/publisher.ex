@@ -34,7 +34,6 @@ defmodule Explorer.SmartContract.Solidity.Publisher do
   def publish(address_hash, params, external_libraries \\ %{}) do
     Logger.info(@sc_verification_via_flattened_file_started)
     Logger.info("Publishing smart contract with address: #{inspect(params)}")
-    Logger.info("External Libraries: #{inspect(external_libraries)}")
     params_with_external_libraries = add_external_libraries(params, external_libraries)
 
     case Verifier.evaluate_authenticity(address_hash, params_with_external_libraries) do
