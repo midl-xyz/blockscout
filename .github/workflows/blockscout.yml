@@ -1,4 +1,4 @@
-name: blockscout
+name: restart-blockscout
 
 on:
   workflow_dispatch:
