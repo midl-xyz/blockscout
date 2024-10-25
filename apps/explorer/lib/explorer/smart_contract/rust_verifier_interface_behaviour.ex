@@ -222,10 +222,16 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
 
       def vyper_versions_list_url, do: base_api_url() <> "/verifier/vyper/versions"
 
-      def base_api_url, do: "#{base_url()}" <> "/api/v2"
+      def base_api_url do
+        base_api = "#{base_url()}/api/v2"
+        Logger.info("Base API URL: #{base_api}")
+        base_api
+      end
 
       def base_url do
-        Microservice.base_url(Explorer.SmartContract.RustVerifierInterfaceBehaviour)
+        url = Microservice.base_url(Explorer.SmartContract.RustVerifierInterfaceBehaviour)
+        Logger.info("Base URL: #{url}")
+        url
       end
 
       def enabled?, do: Application.get_env(:explorer, Explorer.SmartContract.RustVerifierInterfaceBehaviour)[:enabled]
