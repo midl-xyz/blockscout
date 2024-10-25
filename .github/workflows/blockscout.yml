@@ -25,6 +25,7 @@ jobs:
             git pull
             git checkout midl
             . /root/.asdf/asdf.sh
+            mix compile --force
             if screen -list | grep -q "blockscout"; then
               screen -S blockscout -X quit
             fi
