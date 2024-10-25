@@ -25,8 +25,11 @@ jobs:
             git pull
             git checkout midl
             . /root/.asdf/asdf.sh
+            mix compile --force
             if screen -list | grep -q "blockscout"; then
               screen -S blockscout -X quit
+              echo "blockscout terminated"
             fi
+            echo "restart blockscout"
             screen -dmS blockscout bash -c "tail -1 /home/ubuntu/blockscout-backend/env.sh | sh"
           EOF
