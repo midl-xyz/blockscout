@@ -20,11 +20,12 @@ on:
       - production-zkevm
       - production-zksync
       - staging-l2
+      - midl
     paths-ignore:
-      - 'CHANGELOG.md'
-      - '**/README.md'
-      - 'docker/*'
-      - 'docker-compose/*'
+      - "CHANGELOG.md"
+      - "**/README.md"
+      - "docker/*"
+      - "docker-compose/*"
   pull_request:
     types: [opened, synchronize, reopened, labeled]
     branches:
