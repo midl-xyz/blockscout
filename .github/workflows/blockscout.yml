@@ -19,13 +19,14 @@ jobs:
       - name: Blockscout
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            set -e
             sudo -s
             cd blockscout-backend/
             git pull
             git checkout midl
-            /root/.asdf/asdf.sh
+            . /root/.asdf/asdf.sh
             mix compile --force
-            screen -S blockscout -X quit
+            screen -S blockscout -X quit || true
             sleep 5
             screen -dmS blockscout bash -c "tail -1 env.sh | sh"
           EOF
