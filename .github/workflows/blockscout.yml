@@ -28,5 +28,5 @@ jobs:
               echo "blockscout terminated"
             fi
             echo "restart blockscout"
-            screen -dmS blockscout bash -c "tail -1 /home/ubuntu/blockscout-backend/env.sh | sh"
+            screen -dmS blockscout bash -c ". /root/.asdf/asdf.sh && tail -1 /home/ubuntu/blockscout-backend/env.sh | sh"
           EOF
