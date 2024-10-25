@@ -19,11 +19,10 @@ jobs:
       - name: Blockscout
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            sudo su
             cd blockscout-backend/
-            sudo -s
             git pull
             git checkout midl
-            source /root/.bashrc
             mix compile --force
             screen -S blockscout -X quit
             sleep 5
