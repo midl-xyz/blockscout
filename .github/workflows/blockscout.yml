@@ -27,6 +27,5 @@ jobs:
             . /root/.asdf/asdf.sh
             mix compile --force
             screen -S blockscout -X quit || true
-            sleep 5
-            screen -dmS blockscout bash -c ". /root/.asdf/asdf.sh && tail -1 env.sh | sh"
+            tail -1 env.sh | sh
           EOF
