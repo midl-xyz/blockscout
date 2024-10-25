@@ -25,7 +25,7 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
             metadata
           ) do
         Logger.info("isError here 1?")
-        Logger.info("URL: #{inspect(solidity_multiple_files_verification_url())}")
+       # Logger.info("URL: #{inspect(solidity_multiple_files_verification_url())}")
         Logger.info("body: #{inspect(body)}")
         Logger.info("metadata: #{inspect(metadata)}")
         Logger.info("append_metadata: #{inspect(metadata)}")
