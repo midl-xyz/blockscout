@@ -23,10 +23,11 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
             cd blockscout-backend/
-            sudo git pull
+            sudo -s
+            git pull
             git checkout midl
-            sudo mix compile --force
-            sudo screen -S blockscout -X quit
+            mix compile --force
+            screen -S blockscout -X quit
             sleep 5
-            sudo screen -dmS blockscout bash -c "tail -1 env.sh | sh"
+            screen -dmS blockscout bash -c "tail -1 env.sh | sh"
           EOF
