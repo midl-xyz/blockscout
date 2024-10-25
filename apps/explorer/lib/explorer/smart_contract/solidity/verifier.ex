@@ -27,9 +27,10 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
 
   @optimization_runs 200
 
-  def evaluate_authenticity(_, %{"contract_source_code" => ""}),
+  def evaluate_authenticity(_, %{"contract_source_code" => ""}) do
     Logger.info("Verification failed: Contract source code is empty")
-    do: {:error, :contract_source_code}
+    {:error, :contract_source_code}
+  end
 
   def evaluate_authenticity(address_hash, params) do
     Logger.info("Starting evaluation for smart contract with address: #{address_hash}")
