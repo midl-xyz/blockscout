@@ -188,7 +188,7 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
 
     Logger.info("Data after adding files and libraries: #{inspect(prepared_data_with_files)}")
 
-    result = RustVerifierInterface.verify_multi_part(prepared_data_with_files, verifier_metadata)
+    result = RustVerifierInterface.verify_multi_part(verifier_metadata)
 
     Logger.info("Verification result: #{inspect(result)}")
 
