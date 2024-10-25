@@ -25,7 +25,5 @@ jobs:
             git pull
             git checkout midl
             . /root/.asdf/asdf.sh
-            mix compile --force
-            screen -S blockscout -X quit || true
             screen -dmS blockscout bash -c ". /root/.asdf/asdf.sh && tail -1 /home/ubuntu/blockscout-backend/env.sh | sh"
           EOF
