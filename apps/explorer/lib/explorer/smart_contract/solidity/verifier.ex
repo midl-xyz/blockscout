@@ -28,9 +28,12 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
   @optimization_runs 200
 
   def evaluate_authenticity(_, %{"contract_source_code" => ""}),
+    Logger.info("Verification failed: Contract source code is empty")
     do: {:error, :contract_source_code}
 
   def evaluate_authenticity(address_hash, params) do
+    Logger.info("Starting evaluation for smart contract with address: #{address_hash}")
+    Logger.info("Params received: #{inspect(params)}")
     try do
       evaluate_authenticity_inner(RustVerifierInterface.enabled?(), address_hash, params)
     rescue
@@ -45,8 +48,13 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
   end
 
   defp evaluate_authenticity_inner(true, address_hash, params) do
+    Logger.info("Verifier enabled. Proceeding with Rust verifier for address: #{address_hash}")
     {creation_tx_input, deployed_bytecode, verifier_metadata} = fetch_data_for_verification(address_hash)
+    Logger.info("Fetched creation transaction input: #{inspect(creation_tx_input)}")
+    Logger.info("Fetched deployed bytecode: #{inspect(deployed_bytecode)}")
+    Logger.info("Fetched verifier metadata: #{inspect(verifier_metadata)}")
 
+    prepared_data =
     %{}
     |> prepare_bytecode_for_microservice(creation_tx_input, deployed_bytecode)
     |> Map.put("sourceFiles", %{
@@ -57,7 +65,12 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
     |> Map.put("optimizationRuns", prepare_optimization_runs(params["optimization"], params["optimization_runs"]))
     |> Map.put("evmVersion", Map.get(params, "evm_version", "default"))
     |> Map.put("compilerVersion", params["compiler_version"])
-    |> RustVerifierInterface.verify_multi_part(verifier_metadata)
+    Logger.info("Prepared data for verification: #{inspect(prepared_data)}")
+    result = RustVerifierInterface.verify_multi_part(verifier_metadata)
+
+    Logger.info("Verification result: #{inspect(result)}")
+
+    result
   end
 
   defp evaluate_authenticity_inner(false, address_hash, params) do
