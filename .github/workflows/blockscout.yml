@@ -23,7 +23,7 @@ jobs:
             cd blockscout-backend/
             git pull
             git checkout midl
-            /home/ubuntu/.asdf/asdf.sh
+            /root/.asdf/asdf.sh
             mix compile --force
             screen -S blockscout -X quit
             sleep 5
