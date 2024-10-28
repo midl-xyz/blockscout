@@ -30,10 +30,7 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
   def evaluate_authenticity(_, %{"contract_source_code" => ""}),
     do: {:error, :contract_source_code}
 
-
   def evaluate_authenticity(address_hash, params) do
-    Logger.info("Starting evaluation for smart contract with address: #{address_hash}")
-    Logger.info("Params received: #{inspect(params)}")
     try do
       evaluate_authenticity_inner(RustVerifierInterface.enabled?(), address_hash, params)
     rescue
@@ -62,12 +59,12 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
     |> Map.put("evmVersion", Map.get(params, "evm_version", "default"))
     |> Map.put("compilerVersion", params["compiler_version"])
     Logger.info("Going to RustVerifierInterface.verify_multi_part")
-    |>RustVerifierInterface.verify_multi_part(verifier_metadata)
+    |> RustVerifierInterface.verify_multi_part(verifier_metadata)
+    Logger.info("Verify_multi_part finished")
   end
 
   defp evaluate_authenticity_inner(false, address_hash, params) do
     if is_nil(params["name"]) or params["name"] == "" do
-      Logger.info("Entered into a weird branch with off rust verifier")
       {:error, :name}
     else
       latest_evm_version = List.last(CodeCompiler.evm_versions(:solidity))
@@ -161,9 +158,6 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
   def evaluate_authenticity_via_multi_part_files(address_hash, params, files) do
     {creation_tx_input, deployed_bytecode, verifier_metadata} = fetch_data_for_verification(address_hash)
 
-    Logger.info("Fetched creation_tx_input: #{inspect(creation_tx_input)}")
-    Logger.info("Fetched deployed_bytecode: #{inspect(deployed_bytecode)}")
-    Logger.info("Fetched verifier_metadata: #{inspect(verifier_metadata)}")
     %{}
     |> prepare_bytecode_for_microservice(creation_tx_input, deployed_bytecode)
     |> Map.put("sourceFiles", files)
@@ -171,7 +165,7 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
     |> Map.put("optimizationRuns", prepare_optimization_runs(params["optimization"], params["optimization_runs"]))
     |> Map.put("evmVersion", Map.get(params, "evm_version", "default"))
     |> Map.put("compilerVersion", params["compiler_version"])
-    |>RustVerifierInterface.verify_multi_part(verifier_metadata)
+    |> RustVerifierInterface.verify_multi_part(verifier_metadata)
   end
 
   defp verify(address_hash, params, json_input) do
@@ -365,14 +359,8 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
       "trimmed_bytecode" => local_bytecode_without_meta,
       "compiler_version" => solc_local
     } = extract_bytecode_and_metadata_hash(bytecode, deployed_bytecode)
-    # Try logging bytecode
-    Logger.info("Provided Bytecode: #{inspect(bytecode)}")
-    # Try logging default bytecode
-    Logger.info("Provided Deployed Bytecode: #{inspect(deployed_bytecode)}")
 
     bc_deployed_bytecode = Chain.smart_contract_bytecode(address_hash)
-    # LOG deployed bytecode
-    Logger.info("Deployed Bytecode: #{inspect(bc_deployed_bytecode)}")
 
     bc_creation_tx_input =
       case Chain.smart_contract_creation_tx_bytecode(address_hash) do
@@ -389,10 +377,6 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
       "trimmed_bytecode" => bc_creation_tx_input_without_meta,
       "compiler_version" => solc_bc
     } = extract_bytecode_and_metadata_hash(bc_creation_tx_input, bc_deployed_bytecode)
-
-    # LOG creation bytecode
-    Logger.info("Creation Transaction Bytecode: #{inspect(bc_creation_tx_input)}")
-
 
     bc_replaced_local =
       String.replace(bc_creation_tx_input_without_meta, local_bytecode_without_meta, "", global: false)
