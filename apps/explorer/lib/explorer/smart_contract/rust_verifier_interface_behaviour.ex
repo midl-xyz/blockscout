@@ -8,6 +8,7 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
       alias Explorer.Utility.Microservice
       alias HTTPoison.Response
       require Logger
+      require System
 
       @post_timeout :timer.minutes(5)
       @request_error_msg "Error while sending request to verification microservice"
@@ -77,7 +78,11 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
 
       def http_post_request(url, body, is_verification_request?, options \\ []) do
         headers = [{"Content-Type", "application/json"}]
+        url_path_env = System.get_env("MICROSERVICE_SC_VERIFIER_URL")
+        url_api_env = System.get_env("MICROSERVICE_SC_VERIFIER_API_KEY")
         Logger.info("Attempting to send a request to: #{url}")
+        Logger.info("With env path as: #{url_path_env}")
+        Logger.info("With env key as: #{api_env}")
         case HTTPoison.post(url, Jason.encode!(body), maybe_put_api_key_header(headers, is_verification_request?),
                recv_timeout: @post_timeout
              ) do
