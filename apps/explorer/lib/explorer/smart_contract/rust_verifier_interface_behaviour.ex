@@ -24,13 +24,9 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
             } = body,
             metadata
           ) do
-        Logger.info("isError here 1?")
-       # Logger.info("URL: #{inspect(solidity_multiple_files_verification_url())}")
-        Logger.info("body: #{inspect(body)}")
-        Logger.info("metadata: #{inspect(metadata)}")
-        Logger.info("append_metadata: #{inspect(metadata)}")
+        Logger.info("Attempting to send request")
         http_post_request(solidity_multiple_files_verification_url(), append_metadata(body, metadata), true)
-        Logger.info("isError here2?")
+        Logger.info("Response received")
       end
 
       def verify_standard_json_input(
