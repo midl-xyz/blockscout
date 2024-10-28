@@ -58,7 +58,6 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
     |> Map.put("optimizationRuns", prepare_optimization_runs(params["optimization"], params["optimization_runs"]))
     |> Map.put("evmVersion", Map.get(params, "evm_version", "default"))
     |> Map.put("compilerVersion", params["compiler_version"])
-    Logger.info("Going to RustVerifierInterface.verify_multi_part")
     |> RustVerifierInterface.verify_multi_part(verifier_metadata)
     Logger.info("Verify_multi_part finished")
   end
