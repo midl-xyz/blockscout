@@ -78,7 +78,6 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
       def http_post_request(url, body, is_verification_request?, options \\ []) do
         headers = [{"Content-Type", "application/json"}]
         Logger.info("Attempting to send a request to: #{url}")
-        Logger.info("Attempting to send a request with body: #{body}")
         case HTTPoison.post(url, Jason.encode!(body), maybe_put_api_key_header(headers, is_verification_request?),
                recv_timeout: @post_timeout
              ) do
@@ -192,20 +191,20 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
       # https://github.com/PSPDFKit-labs/bypass/issues/122
 
       def solidity_multiple_files_verification_url,
-        do: base_api_url() <> "/verifier/solidity/sources%3Averify-multi-part"
+        do: "/verifier/solidity/sources%3Averify-multi-part"
 
       def vyper_multiple_files_verification_url,
-        do: base_api_url() <> "/verifier/vyper/sources%3Averify-multi-part"
+        do: "/verifier/vyper/sources%3Averify-multi-part"
 
       def vyper_standard_json_verification_url,
-        do: base_api_url() <> "/verifier/vyper/sources%3Averify-standard-json"
+        do: "/verifier/vyper/sources%3Averify-standard-json"
 
       def solidity_standard_json_verification_url do
-        base_api_url() <> verifier_path() <> "/solidity/sources%3Averify-standard-json"
+        "/solidity/sources%3Averify-standard-json"
       end
 
       def versions_list_url do
-        base_api_url() <> verifier_path() <> "/solidity/versions"
+        "/solidity/versions"
       end
 
       defp verifier_path do
@@ -216,9 +215,9 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
         end
       end
 
-      def vyper_versions_list_url, do: base_api_url() <> "/verifier/vyper/versions"
+      def vyper_versions_list_url, do: "/verifier/vyper/versions"
 
-      def base_api_url, do: "#{base_url()}" <> "/api/v2"
+      def base_api_url, do: "/api/v2"
 
       def base_url do
         Microservice.base_url(Explorer.SmartContract.RustVerifierInterfaceBehaviour)
