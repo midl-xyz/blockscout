@@ -24,9 +24,7 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
             } = body,
             metadata
           ) do
-        Logger.info("Attempting to send request")
         http_post_request(solidity_multiple_files_verification_url(), append_metadata(body, metadata), true)
-        Logger.info("Response received")
       end
 
       def verify_standard_json_input(
@@ -79,7 +77,7 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
 
       def http_post_request(url, body, is_verification_request?, options \\ []) do
         headers = [{"Content-Type", "application/json"}]
-
+        Logger.info("Attempting to send a request")
         case HTTPoison.post(url, Jason.encode!(body), maybe_put_api_key_header(headers, is_verification_request?),
                recv_timeout: @post_timeout
              ) do
