@@ -82,6 +82,7 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
                recv_timeout: @post_timeout
              ) do
           {:ok, %Response{body: body, status_code: _}} ->
+            Logger.info("Response receiver")
             process_verifier_response(body, options)
 
           {:error, error} ->
@@ -191,20 +192,20 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
       # https://github.com/PSPDFKit-labs/bypass/issues/122
 
       def solidity_multiple_files_verification_url,
-        do: "/verifier/solidity/sources%3Averify-multi-part"
+        do: base_api_url() <> "/verifier/solidity/sources%3Averify-multi-part"
 
       def vyper_multiple_files_verification_url,
-        do: "/verifier/vyper/sources%3Averify-multi-part"
+        do: base_api_url() <> "/verifier/vyper/sources%3Averify-multi-part"
 
       def vyper_standard_json_verification_url,
-        do: "/verifier/vyper/sources%3Averify-standard-json"
+        do: base_api_url() <> "/verifier/vyper/sources%3Averify-standard-json"
 
       def solidity_standard_json_verification_url do
-        "/solidity/sources%3Averify-standard-json"
+        base_api_url() <> verifier_path() <> "/solidity/sources%3Averify-standard-json"
       end
 
       def versions_list_url do
-        "/solidity/versions"
+        base_api_url() <> verifier_path() <> "/solidity/versions"
       end
 
       defp verifier_path do
@@ -215,9 +216,9 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
         end
       end
 
-      def vyper_versions_list_url, do: "/verifier/vyper/versions"
+      def vyper_versions_list_url, do: base_api_url() <> "/verifier/vyper/versions"
 
-      def base_api_url, do: "/api/v2"
+      def base_api_url, do: "#{base_url()}" <> "/api/v2"
 
       def base_url do
         Microservice.base_url(Explorer.SmartContract.RustVerifierInterfaceBehaviour)
