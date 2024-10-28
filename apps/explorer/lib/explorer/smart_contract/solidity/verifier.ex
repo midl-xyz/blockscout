@@ -27,10 +27,9 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
 
   @optimization_runs 200
 
-  def evaluate_authenticity(_, %{"contract_source_code" => ""}) do
-    Logger.info("Verification failed: Contract source code is empty")
-    {:error, :contract_source_code}
-  end
+  def evaluate_authenticity(_, %{"contract_source_code" => ""}),
+    do: {:error, :contract_source_code}
+
 
   def evaluate_authenticity(address_hash, params) do
     Logger.info("Starting evaluation for smart contract with address: #{address_hash}")
@@ -51,11 +50,7 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
   defp evaluate_authenticity_inner(true, address_hash, params) do
     Logger.info("Verifier enabled. Proceeding with Rust verifier for address: #{address_hash}")
     {creation_tx_input, deployed_bytecode, verifier_metadata} = fetch_data_for_verification(address_hash)
-    #Logger.info("Fetched creation transaction input: #{inspect(creation_tx_input)}")
-    #Logger.info("Fetched deployed bytecode: #{inspect(deployed_bytecode)}")
-    #Logger.info("Fetched verifier metadata: #{inspect(verifier_metadata)}")
 
-    prepared_data =
     %{}
     |> prepare_bytecode_for_microservice(creation_tx_input, deployed_bytecode)
     |> Map.put("sourceFiles", %{
@@ -67,15 +62,12 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
     |> Map.put("evmVersion", Map.get(params, "evm_version", "default"))
     |> Map.put("compilerVersion", params["compiler_version"])
     Logger.info("Going to RustVerifierInterface.verify_multi_part")
-    result = RustVerifierInterface.verify_multi_part(verifier_metadata)
-
-    Logger.info("Verification result: #{inspect(result)}")
-
-    result
+    |>RustVerifierInterface.verify_multi_part(verifier_metadata)
   end
 
   defp evaluate_authenticity_inner(false, address_hash, params) do
     if is_nil(params["name"]) or params["name"] == "" do
+      Logger.info("Entered into a weird branch with off rust verifier")
       {:error, :name}
     else
       latest_evm_version = List.last(CodeCompiler.evm_versions(:solidity))
@@ -172,27 +164,14 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
     Logger.info("Fetched creation_tx_input: #{inspect(creation_tx_input)}")
     Logger.info("Fetched deployed_bytecode: #{inspect(deployed_bytecode)}")
     Logger.info("Fetched verifier_metadata: #{inspect(verifier_metadata)}")
-    prepared_data =
     %{}
     |> prepare_bytecode_for_microservice(creation_tx_input, deployed_bytecode)
-
-    Logger.info("Prepared data for microservice: #{inspect(prepared_data)}")
-
-    prepared_data_with_files =
-    prepared_data
     |> Map.put("sourceFiles", files)
     |> Map.put("libraries", params["external_libraries"])
     |> Map.put("optimizationRuns", prepare_optimization_runs(params["optimization"], params["optimization_runs"]))
     |> Map.put("evmVersion", Map.get(params, "evm_version", "default"))
     |> Map.put("compilerVersion", params["compiler_version"])
-
-    Logger.info("Data after adding files and libraries: #{inspect(prepared_data_with_files)}")
-
-    result = RustVerifierInterface.verify_multi_part(verifier_metadata)
-
-    Logger.info("Verification result: #{inspect(result)}")
-
-    result
+    |>RustVerifierInterface.verify_multi_part(verifier_metadata)
   end
 
   defp verify(address_hash, params, json_input) do

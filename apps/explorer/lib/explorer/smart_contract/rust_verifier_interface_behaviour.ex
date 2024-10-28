@@ -30,7 +30,7 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
         Logger.info("metadata: #{inspect(metadata)}")
         Logger.info("append_metadata: #{inspect(metadata)}")
         http_post_request(solidity_multiple_files_verification_url(), append_metadata(body, metadata), true)
-        Logger.info("isError here")
+        Logger.info("isError here2?")
       end
 
       def verify_standard_json_input(
