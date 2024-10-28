@@ -77,7 +77,9 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
 
       def http_post_request(url, body, is_verification_request?, options \\ []) do
         headers = [{"Content-Type", "application/json"}]
-        Logger.info("Attempting to send a request")
+        Logger.info("Attempting to send a request to: #{url}")
+        Logger.info("Attempting to send a request with body: #{body}")
+        Logger.info("Attempting to send a request with isVerificationRequest Header: #{is_verification_request}")
         case HTTPoison.post(url, Jason.encode!(body), maybe_put_api_key_header(headers, is_verification_request?),
                recv_timeout: @post_timeout
              ) do
