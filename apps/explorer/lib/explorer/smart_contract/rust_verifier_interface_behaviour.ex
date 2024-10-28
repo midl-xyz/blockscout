@@ -24,7 +24,7 @@ defmodule Explorer.SmartContract.RustVerifierInterfaceBehaviour do
             } = body,
             metadata
           ) do
-        http_post_request(solidity_multiple_files_verification_url(), append_metadata(body, metadata), true)
+        http_post_request("/verifier/solidity/sources%3Averify-multi-part", append_metadata(body, metadata), true)
       end
 
       def verify_standard_json_input(
