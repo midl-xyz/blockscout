@@ -1,0 +1,41 @@
+name: reset-blockscout
+
+on:
+  workflow_dispatch:
+
+jobs:
+  reset-blockscout:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.EC2_PRIVATE_KEY }}
+      
+      - name: Build blockscout
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            sudo -s
+            cd blockscout-backend/
+            git pull
+            git checkout midl
+            . /root/.asdf/asdf.sh
+            mix compile --force
+          EOF
+
+      - name: reset blockscout
+        run: |
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            sudo -s
+            cd blockscout-backend/
+            if screen -list | grep -q "blockscout"; then
+              screen -S blockscout -X quit
+              echo "blockscout terminated"
+            fi
+            echo "reset blockscout"
+            screen -dmS blockscout bash -c ". /root/.asdf/asdf.sh && /home/ubuntu/blockscout-backend/env.sh | sh"
+          EOF
