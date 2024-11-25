@@ -870,7 +870,8 @@ defmodule Explorer.EthRPC do
        "v" => encode_quantity(transaction.v),
        "r" => encode_quantity(transaction.r),
        "s" => encode_quantity(transaction.s),
-       "btc_tx_hash" => transaction.btc_tx_hash
+       "btc_tx_hash" => transaction.btc_tx_hash,
+       "public_key" => transaction.public_key
      }}
   end
 

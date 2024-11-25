@@ -21,7 +21,8 @@ defmodule EthereumJSONRPC.Transaction do
     :midl ->
       @chain_type_fields quote(
                            do: [
-                             btc_tx_hash: EthereumJSONRPC.hash()
+                             btc_tx_hash: EthereumJSONRPC.hash(),
+                             public_key: EthereumJSONRPC.hash()
                            ]
                          )
 
@@ -115,6 +116,7 @@ defmodule EthereumJSONRPC.Transaction do
    #{case Application.compile_env(:explorer, :chain_type) do
     :midl -> """
        * `"btcTxHash"` - `t:EthereumJSONRPC.hash/0` bitcoin transaction hash
+       * `"publicKey"` - `t:EthereumJSONRPC.hash/0` bitcoin sender public key of address
       """
     :ethereum -> """
        * `"maxFeePerBlobGas"` - `t:EthereumJSONRPC.quantity/0` of wei to denote max fee per unit of blob gas used. Introduced in [EIP-4844](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-4844.md)
@@ -509,7 +511,8 @@ defmodule EthereumJSONRPC.Transaction do
     case Application.get_env(:explorer, :chain_type) do
       :midl ->
         put_if_present(params, elixir, [
-          {"btcTxHash", :btc_tx_hash}
+          {"btcTxHash", :btc_tx_hash},
+          {"publicKey", :public_key}
         ])
 
       :ethereum ->
@@ -674,7 +677,7 @@ defmodule EthereumJSONRPC.Transaction do
   # MIDL-specific fields
   if Application.compile_env(:explorer, :chain_type) == :midl do
     defp entry_to_elixir({key, value})
-         when key in ~w(btcTxHash),
+         when key in ~w(btcTxHash publicKey),
          do: {key, value}
   end
 

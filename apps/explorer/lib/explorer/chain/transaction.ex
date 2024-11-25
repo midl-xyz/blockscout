@@ -28,11 +28,13 @@ defmodule Explorer.Chain.Transaction.Schema do
 
   @chain_type_fields (case Application.compile_env(:explorer, :chain_type) do
                         :midl ->
-                          quote do
-                            [
+                          elem(
+                            quote do
                               field(:btc_tx_hash, Hash.Full)
-                            ]
-                          end
+                              field(:public_key, Hash.Full)
+                            end,
+                            2
+                          )
 
                         :ethereum ->
                           # elem(quote do ... end, 2) doesn't work with a single has_one instruction
@@ -319,7 +321,7 @@ defmodule Explorer.Chain.Transaction do
 
   @chain_type_optional_attrs (case Application.compile_env(:explorer, :chain_type) do
                                 :midl ->
-                                  ~w(btc_tx_hash)a
+                                  ~w(btc_tx_hash public_key)a
 
                                 :optimism ->
                                   ~w(l1_fee l1_fee_scalar l1_gas_price l1_gas_used l1_tx_origin l1_block_number)a
@@ -398,6 +400,7 @@ defmodule Explorer.Chain.Transaction do
              :value,
              :revert_reason,
              :btc_tx_hash
+             :public_key
            ]}
 
   @derive {Jason.Encoder,
