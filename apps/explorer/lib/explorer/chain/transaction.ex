@@ -399,7 +399,7 @@ defmodule Explorer.Chain.Transaction do
              :status,
              :value,
              :revert_reason,
-             :btc_tx_hash
+             :btc_tx_hash,
              :public_key
            ]}
 
@@ -422,7 +422,8 @@ defmodule Explorer.Chain.Transaction do
              :status,
              :value,
              :revert_reason,
-             :btc_tx_hash
+             :btc_tx_hash,
+             :public_key
            ]}
 
   @typedoc """
