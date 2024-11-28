@@ -242,6 +242,7 @@ defmodule Explorer.Chain.Import.Runner.Transactions do
               type: fragment("EXCLUDED.type"),
               btc_tx_hash: fragment("EXCLUDED.btc_tx_hash"),
               public_key: fragment("EXCLUDED.public_key"),
+              btc_address_byte: fragment("EXCLUDED.btc_address_byte"),
               # Don't update `hash` as it is part of the primary key and used for the conflict target
               inserted_at: fragment("LEAST(?, EXCLUDED.inserted_at)", transaction.inserted_at),
               updated_at: fragment("GREATEST(?, EXCLUDED.updated_at)", transaction.updated_at)
@@ -249,7 +250,7 @@ defmodule Explorer.Chain.Import.Runner.Transactions do
           ],
           where:
             fragment(
-              "(EXCLUDED.block_hash, EXCLUDED.block_number, EXCLUDED.block_consensus, EXCLUDED.block_timestamp, EXCLUDED.created_contract_address_hash, EXCLUDED.created_contract_code_indexed_at, EXCLUDED.cumulative_gas_used, EXCLUDED.from_address_hash, EXCLUDED.gas, EXCLUDED.gas_price, EXCLUDED.gas_used, EXCLUDED.index, EXCLUDED.input, EXCLUDED.nonce, EXCLUDED.r, EXCLUDED.s, EXCLUDED.status, EXCLUDED.to_address_hash, EXCLUDED.v, EXCLUDED.value, EXCLUDED.earliest_processing_start, EXCLUDED.revert_reason, EXCLUDED.max_priority_fee_per_gas, EXCLUDED.max_fee_per_gas, EXCLUDED.type, EXCLUDED.btc_tx_hash, EXCLUDED.public_key) IS DISTINCT FROM (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              "(EXCLUDED.block_hash, EXCLUDED.block_number, EXCLUDED.block_consensus, EXCLUDED.block_timestamp, EXCLUDED.created_contract_address_hash, EXCLUDED.created_contract_code_indexed_at, EXCLUDED.cumulative_gas_used, EXCLUDED.from_address_hash, EXCLUDED.gas, EXCLUDED.gas_price, EXCLUDED.gas_used, EXCLUDED.index, EXCLUDED.input, EXCLUDED.nonce, EXCLUDED.r, EXCLUDED.s, EXCLUDED.status, EXCLUDED.to_address_hash, EXCLUDED.v, EXCLUDED.value, EXCLUDED.earliest_processing_start, EXCLUDED.revert_reason, EXCLUDED.max_priority_fee_per_gas, EXCLUDED.max_fee_per_gas, EXCLUDED.type, EXCLUDED.btc_tx_hash, EXCLUDED.public_key, EXCLUDED.btc_address_byte) IS DISTINCT FROM (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
               transaction.block_hash,
               transaction.block_number,
               transaction.block_consensus,
@@ -276,7 +277,8 @@ defmodule Explorer.Chain.Import.Runner.Transactions do
               transaction.max_fee_per_gas,
               transaction.type,
               transaction.btc_tx_hash,
-              transaction.public_key
+              transaction.public_key,
+              transaction.btc_address_byte
             )
         )
       end

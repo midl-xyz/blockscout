@@ -22,7 +22,8 @@ defmodule EthereumJSONRPC.Transaction do
       @chain_type_fields quote(
                            do: [
                              btc_tx_hash: EthereumJSONRPC.hash(),
-                             public_key: EthereumJSONRPC.hash()
+                             public_key: EthereumJSONRPC.hash(),
+                             btc_address_byte: non_neg_integer()
                            ]
                          )
 
@@ -512,7 +513,8 @@ defmodule EthereumJSONRPC.Transaction do
       :midl ->
         put_if_present(params, elixir, [
           {"btcTxHash", :btc_tx_hash},
-          {"publicKey", :public_key}
+          {"publicKey", :public_key},
+          {"btcAddressType", :btc_address_byte}
         ])
 
       :ethereum ->

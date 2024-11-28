@@ -32,6 +32,7 @@ defmodule Explorer.Chain.Transaction.Schema do
                             quote do
                               field(:btc_tx_hash, Hash.Full)
                               field(:public_key, Hash.Full)
+                              field(:btc_address_byte, :decimal)
                             end,
                             2
                           )
@@ -321,7 +322,7 @@ defmodule Explorer.Chain.Transaction do
 
   @chain_type_optional_attrs (case Application.compile_env(:explorer, :chain_type) do
                                 :midl ->
-                                  ~w(btc_tx_hash public_key)a
+                                  ~w(btc_tx_hash public_key btc_address_byte)a
 
                                 :optimism ->
                                   ~w(l1_fee l1_fee_scalar l1_gas_price l1_gas_used l1_tx_origin l1_block_number)a
@@ -400,7 +401,8 @@ defmodule Explorer.Chain.Transaction do
              :value,
              :revert_reason,
              :btc_tx_hash,
-             :public_key
+             :public_key,
+             :btc_address_byte
            ]}
 
   @derive {Jason.Encoder,
@@ -423,7 +425,8 @@ defmodule Explorer.Chain.Transaction do
              :value,
              :revert_reason,
              :btc_tx_hash,
-             :public_key
+             :public_key,
+             :btc_address_byte
            ]}
 
   @typedoc """
