@@ -157,6 +157,7 @@ defmodule Explorer.Application do
       [
         Explorer.Repo.Beacon,
         Explorer.Repo.Optimism,
+        Explorer.Repo.Midl,
         Explorer.Repo.PolygonEdge,
         Explorer.Repo.PolygonZkevm,
         Explorer.Repo.ZkSync,

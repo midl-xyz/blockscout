@@ -12,6 +12,7 @@ defmodule ConfigHelper do
     repos =
       case chain_type() do
         :ethereum -> base_repos ++ [Explorer.Repo.Beacon]
+        :midl -> base_repos ++ [Explorer.Repo.Midl]
         :optimism -> base_repos ++ [Explorer.Repo.Optimism]
         :polygon_edge -> base_repos ++ [Explorer.Repo.PolygonEdge]
         :polygon_zkevm -> base_repos ++ [Explorer.Repo.PolygonZkevm]
@@ -316,11 +317,12 @@ defmodule ConfigHelper do
     "suave",
     "zetachain",
     "zksync",
-    "celo"
+    "celo",
+    "midl"
   ]
 
   @spec chain_type() :: atom() | nil
-  def chain_type, do: parse_catalog_value("CHAIN_TYPE", @supported_chain_types, true, "default")
+  def chain_type, do: parse_catalog_value("CHAIN_TYPE", @supported_chain_types, true, "midl")
 
   @supported_modes ["all", "indexer", "api"]
 
