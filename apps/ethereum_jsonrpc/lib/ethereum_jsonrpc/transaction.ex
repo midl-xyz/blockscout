@@ -679,7 +679,7 @@ defmodule EthereumJSONRPC.Transaction do
   # MIDL-specific fields
   if Application.compile_env(:explorer, :chain_type) == :midl do
     defp entry_to_elixir({key, value})
-         when key in ~w(btcTxHash publicKey),
+         when key in ~w(btcTxHash btcAddressByte publicKey),
          do: {key, value}
   end
 
