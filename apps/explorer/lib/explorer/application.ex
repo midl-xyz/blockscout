@@ -183,6 +183,7 @@ defmodule Explorer.Application do
         Explorer.Repo.Celo,
         Explorer.Repo.Filecoin,
         Explorer.Repo.Optimism,
+        Explorer.Repo.Midl,
         Explorer.Repo.PolygonEdge,
         Explorer.Repo.PolygonZkevm,
         Explorer.Repo.RSK,

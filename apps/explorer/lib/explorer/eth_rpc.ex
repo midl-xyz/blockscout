@@ -869,7 +869,10 @@ defmodule Explorer.EthRPC do
        "chainId" => chain_id(),
        "v" => encode_quantity(transaction.v),
        "r" => encode_quantity(transaction.r),
-       "s" => encode_quantity(transaction.s)
+       "s" => encode_quantity(transaction.s),
+       "btc_tx_hash" => transaction.btc_tx_hash,
+       "public_key" => transaction.public_key,
+       "btc_address_byte" => transaction.btc_address_byte
      }}
   end
 

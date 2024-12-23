@@ -74,6 +74,11 @@ config :explorer, Explorer.Repo.Suave,
   url: ExplorerConfigHelper.get_suave_db_url(),
   pool_size: 1,
   ssl: ExplorerConfigHelper.ssl_enabled?()
+# Configures MIDL database
+config :explorer, Explorer.Repo.Midl,
+  url: System.get_env("DATABASE_URL"),
+  pool_size: 1,
+  ssl: ExplorerConfigHelper.ssl_enabled?()
 
 # Actually the following repos are not started, and its pool size remains
 # unused. Separating repos for different chain type or feature flag is

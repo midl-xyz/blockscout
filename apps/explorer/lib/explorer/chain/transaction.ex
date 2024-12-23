@@ -31,6 +31,16 @@ defmodule Explorer.Chain.Transaction.Schema do
   alias Explorer.Chain.ZkSync.BatchTransaction, as: ZkSyncBatchTransaction
 
   @chain_type_fields (case @chain_type do
+                        :midl ->
+                          elem(
+                            quote do
+                              field(:btc_tx_hash, Hash.Full)
+                              field(:public_key, Hash.Full)
+                              field(:btc_address_byte, :decimal)
+                            end,
+                            2
+                          )
+
                         :ethereum ->
                           # elem(quote do ... end, 2) doesn't work with a single has_one instruction
                           quote do
@@ -334,6 +344,8 @@ defmodule Explorer.Chain.Transaction do
                      to_address_hash revert_reason type has_error_in_internal_transactions r s v)a
 
   @chain_type_optional_attrs (case @chain_type do
+                                :midl ->
+                                  ~w(btc_tx_hash public_key btc_address_byte)a
                                 :optimism ->
                                   ~w(l1_fee l1_fee_scalar l1_gas_price l1_gas_used l1_transaction_origin l1_block_number)a
 
@@ -412,7 +424,10 @@ defmodule Explorer.Chain.Transaction do
              :v,
              :status,
              :value,
-             :revert_reason
+             :revert_reason,
+             :btc_tx_hash,
+             :public_key,
+             :btc_address_byte
            ]}
 
   @derive {Jason.Encoder,
@@ -433,7 +448,10 @@ defmodule Explorer.Chain.Transaction do
              :v,
              :status,
              :value,
-             :revert_reason
+             :revert_reason,
+             :btc_tx_hash,
+             :public_key,
+             :btc_address_byte
            ]}
 
   @typedoc """

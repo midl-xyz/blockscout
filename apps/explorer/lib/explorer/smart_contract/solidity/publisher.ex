@@ -33,6 +33,7 @@ defmodule Explorer.SmartContract.Solidity.Publisher do
   """
   def publish(address_hash, params, external_libraries \\ %{}) do
     Logger.info(@sc_verification_via_flattened_file_started)
+    Logger.info("Publishing smart contract with address: #{inspect(params)}")
     params_with_external_libraries = add_external_libraries(params, external_libraries)
 
     case Verifier.evaluate_authenticity(address_hash, params_with_external_libraries) do
@@ -48,24 +49,30 @@ defmodule Explorer.SmartContract.Solidity.Publisher do
           "sourceFiles" => _
         } = result_params
       } ->
+        Logger.info("Verification successful: #{inspect(result_params)}")
         process_rust_verifier_response(result_params, address_hash, params, false, false)
 
       {:ok, %{abi: abi, constructor_arguments: constructor_arguments}} ->
+        Logger.info("Verification partially successful with constructor args: #{inspect(constructor_arguments)}")
         params_with_constructor_arguments =
           Map.put(params_with_external_libraries, "constructor_arguments", constructor_arguments)
 
         publish_smart_contract(address_hash, params_with_constructor_arguments, abi)
 
       {:ok, %{abi: abi}} ->
+        Logger.info("Verification partially successful without constructor arguments.")
         publish_smart_contract(address_hash, params_with_external_libraries, abi)
 
       {:error, error} ->
+        Logger.error("Verification failed with custom log error: #{inspect(error)}")
         {:error, unverified_smart_contract(address_hash, params_with_external_libraries, error, nil)}
 
       {:error, error, error_message} ->
+        Logger.error("Verification failed with error: #{inspect(error)}, message: #{error_message}")
         {:error, unverified_smart_contract(address_hash, params_with_external_libraries, error, error_message)}
 
       _ ->
+        Logger.error("Verification failed with unexpected response.")
         {:error, unverified_smart_contract(address_hash, params_with_external_libraries, "Unexpected error", nil)}
     end
   end

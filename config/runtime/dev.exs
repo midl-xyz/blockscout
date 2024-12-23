@@ -102,6 +102,13 @@ config :explorer, Explorer.Repo.Mud,
   pool_size: ConfigHelper.parse_integer_env_var("MUD_POOL_SIZE", 10),
   queue_target: queue_target
 
+# Configure MIDL database
+config :explorer, Explorer.Repo.Midl,
+  database: database,
+  hostname: hostname,
+  url: System.get_env("DATABASE_URL"),
+  pool_size: 1
+
 # Configure Suave database
 config :explorer, Explorer.Repo.Suave,
   database: database,

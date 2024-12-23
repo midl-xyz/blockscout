@@ -58,6 +58,7 @@ defmodule Explorer.SmartContract.Solidity.Verifier do
     |> Map.put("evmVersion", Map.get(params, "evm_version", "default"))
     |> Map.put("compilerVersion", params["compiler_version"])
     |> RustVerifierInterface.verify_multi_part(verifier_metadata)
+    Logger.info("Verify_multi_part finished")
   end
 
   defp evaluate_authenticity_inner(false, address_hash, params) do
