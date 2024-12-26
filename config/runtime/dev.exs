@@ -135,6 +135,7 @@ for repo <- [
       Explorer.Repo.Stability,
       Explorer.Repo.Zilliqa,
       Explorer.Repo.ZkSync,
+      Explorer.Repo.Midl,
       # Feature dependent repos
       Explorer.Repo.BridgedTokens,
       Explorer.Repo.ShrunkInternalTransactions
