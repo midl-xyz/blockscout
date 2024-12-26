@@ -904,6 +904,19 @@ defmodule BlockScoutWeb.API.V2.TransactionView do
         BlockScoutWeb.API.V2.CeloView.extend_transaction_json_response(result, transaction)
       end
 
+    :midl ->
+      defp chain_type_transformations(transactions) do
+        transactions
+      end
+
+      defp chain_type_fields(result, transaction, single_transaction?, conn, _watchlist_names) do
+        if single_transaction? do
+          BlockScoutWeb.API.V2.MidlView.extend_transaction_json_response(result, transaction)
+        else
+          result
+        end
+      end
+
     :zilliqa ->
       defp chain_type_transformations(transactions) do
         transactions
