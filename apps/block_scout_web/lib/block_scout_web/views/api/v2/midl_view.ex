@@ -26,6 +26,8 @@ defmodule BlockScoutWeb.API.V2.MidlView do
   def extend_transaction_json_response(out_json, %Transaction{} = transaction) do
     out_json
     |> Map.put("btc_tx_hash", transaction.btc_tx_hash)
+    |> Map.put("public_key", transaction.public_key)
+    |> Map.put("btc_address_byte", transaction.btc_address_byte)
   end
 
 end
