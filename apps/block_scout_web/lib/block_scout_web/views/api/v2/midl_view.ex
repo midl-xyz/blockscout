@@ -28,6 +28,22 @@ defmodule BlockScoutWeb.API.V2.MidlView do
     |> Map.put("btc_tx_hash", remove_0x_prefix_if_any(transaction.btc_tx_hash))
     |> Map.put("public_key", remove_0x_prefix_if_any(transaction.public_key))
     |> Map.put("btc_address_byte", remove_0x_prefix_if_any(transaction.btc_address_byte))
+    |> Map.put("intents", map_intents(transaction.intents))
+  end
+
+  defp map_intents(nil), do: []
+  defp map_intents(intents) when is_list(intents) do
+    Enum.map(intents, &map_intent_transaction/1)
+  end
+
+  defp map_intent_transaction(%Transaction{} = intent_tx) do
+    method = Transaction.method_name(intent_tx, nil, false)
+
+    %{
+      "method" => method,
+      "hash" => remove_0x_prefix_if_any(intent_tx.hash),
+      "status" => to_string(intent_tx.status)
+    }
   end
 
   def remove_0x_prefix_if_any(nil), do: nil

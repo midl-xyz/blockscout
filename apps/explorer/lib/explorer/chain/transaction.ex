@@ -37,6 +37,13 @@ defmodule Explorer.Chain.Transaction.Schema do
                               field(:btc_tx_hash, Hash.Full)
                               field(:public_key, Hash.Full)
                               field(:btc_address_byte, :decimal)
+
+                              has_many(
+                                :intents,
+                                __MODULE__,
+                                foreign_key: :btc_tx_hash,
+                                references: :btc_tx_hash
+                              )
                             end,
                             2
                           )
