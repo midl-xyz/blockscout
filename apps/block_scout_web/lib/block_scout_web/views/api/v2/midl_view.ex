@@ -37,12 +37,11 @@ defmodule BlockScoutWeb.API.V2.MidlView do
   end
 
   defp map_intent_transaction(%Transaction{} = intent_tx) do
-    method = Transaction.method_name(intent_tx, nil, false)
-
+    [decoded_input] = Transaction.decode_transactions([intent_tx], true, [api?: true])
     %{
-      "method" => method,
-      "hash" => remove_0x_prefix_if_any(intent_tx.hash),
-      "status" => to_string(intent_tx.status)
+      "method" => Transaction.method_name(intent_tx, decoded_input),
+      "hash" => intent_tx.hash,
+      "status" => intent_tx.status
     }
   end
 

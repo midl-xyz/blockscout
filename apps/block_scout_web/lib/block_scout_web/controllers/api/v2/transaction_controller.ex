@@ -162,6 +162,8 @@ defmodule BlockScoutWeb.API.V2.TransactionController do
         :midl ->
           necessity_by_association_with_actions
           |> Map.put(:intents, :optional)
+          |> Map.put([intents: :to_address], :optional)
+          |> Map.put([intents: :created_contract_address], :optional)
 
         _ ->
           necessity_by_association_with_actions
