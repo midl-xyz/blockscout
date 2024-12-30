@@ -3407,29 +3407,72 @@ defmodule Explorer.Chain do
   @spec join_association(atom() | Ecto.Query.t(), [{atom(), atom()}], :optional | :required) :: Ecto.Query.t()
   def join_association(query, [{association, nested_preload}], necessity)
       when is_atom(association) and is_atom(nested_preload) do
-    case necessity do
-      :optional ->
-        preload(query, [{^association, ^nested_preload}])
 
-      :required ->
-        from(q in query,
-          inner_join: a in assoc(q, ^association),
-          as: ^association,
-          left_join: b in assoc(a, ^nested_preload),
-          as: ^nested_preload,
-          preload: [{^association, {a, [{^nested_preload, b}]}}]
-        )
+    if association == :intents and Application.get_env(:explorer, :chain_type) == :midl do
+      case necessity do
+        :optional ->
+          from(q in query,
+            left_join: i in assoc(q, :intents),
+            on:
+              not is_nil(q.btc_tx_hash) and
+              fragment(
+                "? <> decode('0000000000000000000000000000000000000000000000000000000000000000', 'hex')",
+                i.btc_tx_hash
+              ) and
+              q.btc_tx_hash == i.btc_tx_hash,  
+            left_join: a2 in assoc(i, :created_contract_address),
+            left_join: a4 in assoc(i, :to_address),
+            preload: [
+              intents: {i, [created_contract_address: a2, to_address: a4]}
+            ]
+          )
+      end      
+    else
+      case necessity do
+        :optional ->
+          preload(query, [{^association, ^nested_preload}])
+
+        :required ->
+          from(q in query,
+            inner_join: a in assoc(q, ^association),
+            as: ^association,
+            left_join: b in assoc(a, ^nested_preload),
+            as: ^nested_preload,
+            preload: [{^association, {a, [{^nested_preload, b}]}}]
+          )
+      end
     end
   end
 
   @spec join_association(atom() | Ecto.Query.t(), atom(), :optional | :required) :: Ecto.Query.t()
   def join_association(query, association, necessity) do
-    case necessity do
-      :optional ->
-        preload(query, ^association)
+    if association == :intents and Application.get_env(:explorer, :chain_type) == :midl do
+      case necessity do
+        :optional ->
+          from(q in query,
+            left_join: i in assoc(q, :intents),
+            on:
+              not is_nil(q.btc_tx_hash) and
+              fragment(
+                "? <> decode('0000000000000000000000000000000000000000000000000000000000000000', 'hex')",
+                i.btc_tx_hash
+              ) and
+              q.btc_tx_hash == i.btc_tx_hash,  
+            left_join: a2 in assoc(i, :created_contract_address),
+            left_join: a4 in assoc(i, :to_address),
+            preload: [
+              intents: {i, [created_contract_address: a2, to_address: a4]}
+            ]
+          )
+      end
+    else
+      case necessity do
+        :optional ->
+          preload(query, ^association)
 
-      :required ->
-        from(q in query, inner_join: a in assoc(q, ^association), as: ^association, preload: [{^association, a}])
+        :required ->
+          from(q in query, inner_join: a in assoc(q, ^association), as: ^association, preload: [{^association, a}])
+      end
     end
   end
 
