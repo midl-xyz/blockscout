@@ -36,7 +36,7 @@ jobs:
         
                     docker compose up -d --force-recreate blockscout-backend
                     
-                    git add docker-compose.yaml
+                    git add docker-compose.yam
                     git commit -m "update blockscout-backend image with CI to tag ${SHORT_SHA}"
                     git pull origin main --rebase
                     git push
