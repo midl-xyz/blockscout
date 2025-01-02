@@ -1,0 +1,40 @@
+name: Deploy to regtest
+
+on:
+    workflow_dispatch:
+
+jobs:
+    deploy-to-regtest:
+        name: Deploy to regtest
+        runs-on: ubuntu-latest
+        steps:
+            -   name: Check out the repo
+                uses: actions/checkout@v4
+
+            -   name: Add SHORT_SHA env property with commit short sha
+                run: echo "SHORT_SHA=`echo ${GITHUB_SHA} | cut -c1-8`" >> $GITHUB_ENV
+            
+            -   name: Set up SSH
+                uses: webfactory/ssh-agent@v0.5.3
+                with:
+                  ssh-private-key: ${{ secrets.EC2_PRIVATE_KEY }}
+        
+            -   name: Build Docker image on EC2
+                run: |
+                  ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST_REGTEST }} << 'EOF'
+                    cd ~/blockscout-midl
+                    git pull origin main --rebase
+                    
+                    SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7 )
+                    docker build . -t blockscout-midl:backend-${SHORT_SHA} --no-cache
+                    
+                    cd ~/infra/regtest/blockscout
+                    yq -i '.services.blockscout-backend.image = "blockscout-midl:backend-" + env(SHORT_SHA)' docker-compose.yaml
+        
+                    docker compose up -d --force-recreate blockscout-backend
+                    
+                    git add docker-compose.yaml
+                    git commit -m "update blockscout-frontend image with CI to tag ${SHORT_SHA}"
+                    git pull origin main --rebase
+                    git push
+                  EOF
