@@ -23,10 +23,13 @@ jobs:
                 run: |
                   ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST_REGTEST }} << 'EOF'
                     cd ~/blockscout-midl
-                    git pull origin main --rebase
+                    git checkout midl
+                    git pull origin midl --rebase
                     
-                    SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7 )
-                    docker build . -t blockscout-midl:backend-${SHORT_SHA} --no-cache
+                    export SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7 )
+                    docker build  --build-arg API_V1_READ_METHODS_DISABLED="false"   --build-arg DISABLE_WEBAPP="false" \
+                                  --build-arg API_V1_WRITE_METHODS_DISABLED="false"  --build-arg RELEASE_VERSION="6.10.0" \
+                                  --build-arg CHAIN_TYPE="midl"  -t blockscout-midl:${SHORT_SHA} -f docker/Dockerfile . --no-cache
                     
                     cd ~/infra/regtest/blockscout
                     yq -i '.services.blockscout-backend.image = "blockscout-midl:backend-" + env(SHORT_SHA)' docker-compose.yaml
@@ -34,7 +37,7 @@ jobs:
                     docker compose up -d --force-recreate blockscout-backend
                     
                     git add docker-compose.yaml
-                    git commit -m "update blockscout-frontend image with CI to tag ${SHORT_SHA}"
+                    git commit -m "update blockscout-backend image with CI to tag ${SHORT_SHA}"
                     git pull origin main --rebase
                     git push
                   EOF
