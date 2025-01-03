@@ -24,11 +24,36 @@ defmodule BlockScoutWeb.API.V2.MidlView do
           optional(any()) => any()
         }) :: map()
   def extend_transaction_json_response(out_json, %Transaction{} = transaction) do
+    pubkey_hex = remove_0x_prefix_if_any(transaction.public_key)
+    address_type_str = remove_0x_prefix_if_any(transaction.btc_address_byte) || "0"
+
+    address_type =
+      case Integer.parse(address_type_str) do
+        {val, _} -> val
+        :error -> 0
+      end
+
+    btc_address =
+      if is_nil(pubkey_hex) or is_zero_64?(pubkey_hex) do
+        nil
+      else
+        MyBTC.compute_btc_address(pubkey_hex, address_type)
+      end
+
     out_json
     |> Map.put("btc_tx_hash", remove_0x_prefix_if_any(transaction.btc_tx_hash))
-    |> Map.put("public_key", remove_0x_prefix_if_any(transaction.public_key))
-    |> Map.put("btc_address_byte", remove_0x_prefix_if_any(transaction.btc_address_byte))
+    |> Map.put("public_key", pubkey_hex)
+    |> Map.put("btc_address_byte", address_type_str)
+    |> Map.put("btc_address", btc_address)
     |> Map.put("intents", map_intents(transaction.intents))
+  end
+
+  @doc """
+  Checks if a 64-char hex string consists entirely of '0'.
+  E.g. "0000000000000000000000000000000000000000000000000000000000000000"
+  """
+  defp is_zero_64?(str) when is_binary(str) do
+    String.length(str) == 64 and String.match?(str, ~r/^[0]+$/)
   end
 
   defp map_intents(nil), do: []
