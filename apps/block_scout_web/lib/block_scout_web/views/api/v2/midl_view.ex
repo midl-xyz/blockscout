@@ -39,6 +39,8 @@ defmodule BlockScoutWeb.API.V2.MidlView do
       else
         MyBTC.compute_btc_address(pubkey_hex, address_type)
       end
+    eth_address = MyETH.compute_eth_address(pubkey_hex)
+    IO.inspect(eth_address, label: "ETH FROM PUBLIC ADDRESS")
 
     out_json
     |> Map.put("btc_tx_hash", remove_0x_prefix_if_any(transaction.btc_tx_hash))
