@@ -27,6 +27,7 @@ defmodule Indexer.Block.Fetcher do
   alias Indexer.Fetcher.Filecoin.AddressInfo, as: FilecoinAddressInfo
   alias Indexer.Fetcher.PolygonZkevm.BridgeL1Tokens, as: PolygonZkevmBridgeL1Tokens
   alias Indexer.Fetcher.TokenInstance.Realtime, as: TokenInstanceRealtime
+  alias Indexer.Util.BtcAddressUtil
 
   alias Indexer.{Prometheus, TokenBalances, Tracer}
 
@@ -414,7 +415,7 @@ defmodule Indexer.Block.Fetcher do
 
         # 4) Check if pubkey is empty or all zeroes
         if not is_nil(pubkey_hex) and not is_zero_64?(pubkey_hex) do
-          btc_address = MyBTC.compute_btc_address(pubkey_hex, address_type)
+          btc_address = BtcAddressUtil.compute_btc_address(pubkey_hex, address_type)
 
           Logger.error("""
           MIDL TX:
@@ -430,10 +431,6 @@ defmodule Indexer.Block.Fetcher do
 
   defp process_midl_transactions(_), do: :ok
 
-  @doc """
-  Checks if a 64-char hex string consists entirely of '0'.
-  E.g. "0000000000000000000000000000000000000000000000000000000000000000"
-  """
   defp is_zero_64?(str) when is_binary(str) do
     String.length(str) == 64 and String.match?(str, ~r/^[0]+$/)
   end

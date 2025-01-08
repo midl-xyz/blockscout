@@ -1,13 +1,9 @@
 defmodule BlockScoutWeb.API.V2.MidlView do
   use BlockScoutWeb, :view
 
-  import Ecto.Query, only: [from: 2]
-
-  alias BlockScoutWeb.API.V2.Helper
-  alias Explorer.{Chain, Repo}
-  alias Explorer.Helper, as: ExplorerHelper
-  alias Explorer.Chain.{Block, Transaction}
-  alias Explorer.Chain.Optimism.{FrameSequence, FrameSequenceBlob, Withdrawal}
+  alias Explorer.Chain.{Transaction}
+  alias Indexer.Util.EthAddressUtil
+  alias Indexer.Util.BtcAddressUtil
 
   @doc """
     Extends the json output for a transaction adding MIDL-related info to the output.
@@ -37,9 +33,9 @@ defmodule BlockScoutWeb.API.V2.MidlView do
       if is_nil(pubkey_hex) or is_zero_64?(pubkey_hex) do
         nil
       else
-        MyBTC.compute_btc_address(pubkey_hex, address_type)
+        BtcAddressUtil.compute_btc_address(pubkey_hex, address_type)
       end
-    eth_address = MyETH.compute_eth_address(pubkey_hex)
+    eth_address = EthAddressUtil.get_evm_address(pubkey_hex)
     IO.inspect(eth_address, label: "ETH FROM PUBLIC ADDRESS")
 
     out_json
@@ -50,10 +46,8 @@ defmodule BlockScoutWeb.API.V2.MidlView do
     |> Map.put("intents", map_intents(transaction.intents))
   end
 
-  @doc """
-  Checks if a 64-char hex string consists entirely of '0'.
-  E.g. "0000000000000000000000000000000000000000000000000000000000000000"
-  """
+  #Checks if a 64-char hex string consists entirely of '0'.
+  #E.g. "0000000000000000000000000000000000000000000000000000000000000000"
   defp is_zero_64?(str) when is_binary(str) do
     String.length(str) == 64 and String.match?(str, ~r/^[0]+$/)
   end

@@ -158,8 +158,7 @@ defmodule BlockScoutWeb.Mixfile do
       {:ueberauth_auth0, "~> 2.0"},
       {:utils, in_umbrella: true},
       {:bureaucrat, "~> 0.2.9", only: :test},
-      {:logger_json, "~> 5.1"},
-      {:bitcoinex, "~> 0.1.8"}
+      {:logger_json, "~> 5.1"}
     ]
   end
 

@@ -1,11 +1,10 @@
-defmodule MyBTC do
+defmodule Indexer.Util.BtcAddressUtil do
   @moduledoc """
   Provides functions to compute BTC addresses (p2wpkh or p2tr)
   using the latest bitcoinex Segwit API.
   """
 
-  alias Bitcoinex.{Key, Secp256k1, Segwit}
-  alias Bitcoinex.Network
+  alias Bitcoinex.{Segwit}
 
   @doc """
   Given a hex-encoded public key and an address type:
@@ -70,29 +69,58 @@ defmodule MyBTC do
     end
   end
 
-  @doc """
-  Compress a 65-byte uncompressed pubkey (0x04 prefix + 64 bytes).
-  Returns a 33-byte compressed pubkey (0x02/0x03 + 32 bytes).
-  """
-  defp compress_65_byte(<<4, uncompressed_coords::binary-size(64)>>) do
-    # parse x,y => compress => return
-    case Bitcoinex.Secp256k1.point_decode(<<4>> <> uncompressed_coords) do
-      {:ok, point} ->
-        Bitcoinex.Secp256k1.point_encode(point, :compressed)
-
-      :error ->
-        nil
-    end
+  def compress_65_byte(<<4, x::binary-size(32), y::binary-size(32)>>) do
+    prefix = if rem(:binary.decode_unsigned(y), 2) == 0, do: <<2>>, else: <<3>>
+    <<prefix::binary, x::binary>>
   end
 
-  defp compress_65_byte(_), do: nil
+  def compress_65_byte(_), do: {:error, "Invalid uncompressed public key"}
 
-  @doc """
-  Plain hash160: hash160(sha256(data)).
-  Returns a binary (20 bytes).
-  """
+  def decode_point(<<prefix, x::binary-size(32)>>) when prefix in [2, 3] do
+    {:ok, {x, calculate_y(x, prefix == 3)}}
+  end
+
+  def decode_point(<<4, x::binary-size(32), y::binary-size(32)>>), do: {:ok, {x, y}}
+
+  def decode_point(_), do: {:error, "Invalid public key format"}
+
+  def encode_point({x, y}, :compressed) do
+    prefix = if rem(:binary.decode_unsigned(y), 2) == 0, do: <<2>>, else: <<3>>
+    <<prefix::binary, x::binary>>
+  end
+
+  def encode_point({x, y}, :uncompressed) do
+    <<4::integer, x::binary, y::binary>>
+  end
+
+  def encode_point(_, _), do: {:error, "Unsupported format"}
+
+  defp calculate_y(x, odd?) do
+    p = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
+    a = 0
+    b = 7
+
+    # Compute y^2 = (x^3 + a*x + b) mod p
+    x_int = :binary.decode_unsigned(x)
+    y_squared = rem(x_int * x_int * x_int + a * x_int + b, p)
+
+    # Modular square root
+    y = modular_sqrt(y_squared, p)
+
+    # Ensure correct parity
+    if odd? == odd?(y), do: :binary.encode_unsigned(y), else: :binary.encode_unsigned(p - y)
+  end
+
+  defp modular_sqrt(value, p) do
+    # Uses exponentiation for modular square root: value^((p+1)/4) mod p
+    :math.pow(value, (p + 1) / 4) |> trunc() |> rem(p)
+  end
+
+  defp odd?(n), do: rem(n, 2) == 1
+
   defp hash160(data) do
     sha = :crypto.hash(:sha256, data)
     :crypto.hash(:ripemd160, sha)
   end
+
 end
