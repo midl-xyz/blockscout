@@ -35,30 +35,38 @@ defmodule BlockScoutWeb.API.V2.MidlView do
       else
         BtcAddressUtil.compute_btc_address(pubkey_hex, address_type)
       end
-    eth_address = EthAddressUtil.get_evm_address(pubkey_hex)
-    IO.inspect(eth_address, label: "ETH FROM PUBLIC ADDRESS")
+
+    eth_address =
+      if is_nil(pubkey_hex) or is_zero_64?(pubkey_hex) do
+        nil
+      else
+        EthAddressUtil.get_evm_address(pubkey_hex)
+      end
 
     out_json
     |> Map.put("btc_tx_hash", remove_0x_prefix_if_any(transaction.btc_tx_hash))
     |> Map.put("public_key", pubkey_hex)
     |> Map.put("btc_address_byte", address_type_str)
     |> Map.put("btc_address", btc_address)
+    |> Map.put("eth_address", eth_address)
     |> Map.put("intents", map_intents(transaction.intents))
   end
 
-  #Checks if a 64-char hex string consists entirely of '0'.
-  #E.g. "0000000000000000000000000000000000000000000000000000000000000000"
+  # Checks if a 64-char hex string consists entirely of '0'.
+  # E.g. "0000000000000000000000000000000000000000000000000000000000000000"
   defp is_zero_64?(str) when is_binary(str) do
     String.length(str) == 64 and String.match?(str, ~r/^[0]+$/)
   end
 
   defp map_intents(nil), do: []
+
   defp map_intents(intents) when is_list(intents) do
     Enum.map(intents, &map_intent_transaction/1)
   end
 
   defp map_intent_transaction(%Transaction{} = intent_tx) do
-    [decoded_input] = Transaction.decode_transactions([intent_tx], true, [api?: true])
+    [decoded_input] = Transaction.decode_transactions([intent_tx], true, api?: true)
+
     %{
       "method" => Transaction.method_name(intent_tx, decoded_input),
       "hash" => intent_tx.hash,
@@ -84,5 +92,4 @@ defmodule BlockScoutWeb.API.V2.MidlView do
       other -> other
     end
   end
-
 end

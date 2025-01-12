@@ -19,6 +19,7 @@ defmodule Explorer.Chain.Search do
 
   alias Explorer.Chain.{
     Address,
+    AddressesMap,
     Beacon.Blob,
     Block,
     DenormalizationHelper,
@@ -203,11 +204,14 @@ defmodule Explorer.Chain.Search do
 
     labels_query = search_label_query(term, paging_options)
 
+    btc_address_map_query = search_btc_address_map_query(term, paging_options)
+
     from(
       tokens in subquery(tokens_query_certified),
       union_all: ^tokens_query_not_certified,
       union_all: ^contracts_query,
-      union_all: ^labels_query
+      union_all: ^labels_query,
+      union_all: ^btc_address_map_query
     )
   end
 
@@ -337,7 +341,9 @@ defmodule Explorer.Chain.Search do
 
     labels_query = term |> search_label_query(paging_options) |> select_repo(options).all()
 
-    [tokens_results, contracts_results, labels_query]
+    btc_address_map_query = term |> search_btc_address_map_query(paging_options) |> select_repo(options).all()
+
+    [tokens_results, contracts_results, labels_query, btc_address_map_query]
   end
 
   defp await_ens_task(ens_task) do
@@ -362,6 +368,36 @@ defmodule Explorer.Chain.Search do
       _ ->
         :none
     end
+  end
+
+  defp search_btc_address_map_query(term, paging_options) do
+    address_map_search_fields =
+      search_fields()
+
+      |> Map.put(:address_hash, dynamic([am], am.eth_address))
+      |> Map.put(:type, "address")
+      |> Map.put(:name, dynamic([am], am.btc_address))
+      |> Map.put(:inserted_at, dynamic([am], am.inserted_at))
+
+      |> Map.put(:verified, false)
+      |> Map.put(:certified, false)
+      |> Map.put(:timestamp, nil)
+
+      |> Map.put(:priority, 0)
+
+    base_query =
+      from(am in AddressesMap,
+        where:
+          fragment(
+            "to_tsvector('simple', coalesce(?, '')) @@ to_tsquery('simple', ?)",
+            am.btc_address,
+            ^term
+          ),
+        select: ^address_map_search_fields
+      )
+
+    base_query
+    |> limit(^paging_options.page_size)
   end
 
   defp search_label_query(term, paging_options) do

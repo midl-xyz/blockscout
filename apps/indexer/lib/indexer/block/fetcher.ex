@@ -28,6 +28,7 @@ defmodule Indexer.Block.Fetcher do
   alias Indexer.Fetcher.PolygonZkevm.BridgeL1Tokens, as: PolygonZkevmBridgeL1Tokens
   alias Indexer.Fetcher.TokenInstance.Realtime, as: TokenInstanceRealtime
   alias Indexer.Util.BtcAddressUtil
+  alias Indexer.Util.EthAddressUtil
 
   alias Indexer.{Prometheus, TokenBalances, Tracer}
 
@@ -416,6 +417,11 @@ defmodule Indexer.Block.Fetcher do
         # 4) Check if pubkey is empty or all zeroes
         if not is_nil(pubkey_hex) and not is_zero_64?(pubkey_hex) do
           btc_address = BtcAddressUtil.compute_btc_address(pubkey_hex, address_type)
+          eth_address = EthAddressUtil.get_evm_address(pubkey_hex)
+
+          if btc_address && eth_address do
+            Explorer.Chain.insert_addresses_map(pubkey_hex, btc_address, eth_address)
+          end
 
           Logger.error("""
           MIDL TX:
