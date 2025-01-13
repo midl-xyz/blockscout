@@ -47,6 +47,7 @@ defmodule Explorer.Chain do
     Address.CoinBalanceDaily,
     Address.CurrentTokenBalance,
     Address.TokenBalance,
+    AddressesMap,
     Block,
     BlockNumberHelper,
     CurrencyHelper,
@@ -3407,7 +3408,6 @@ defmodule Explorer.Chain do
   @spec join_association(atom() | Ecto.Query.t(), [{atom(), atom()}], :optional | :required) :: Ecto.Query.t()
   def join_association(query, [{association, nested_preload}], necessity)
       when is_atom(association) and is_atom(nested_preload) do
-
     if association == :intents and Application.get_env(:explorer, :chain_type) == :midl do
       case necessity do
         :optional ->
@@ -3415,18 +3415,18 @@ defmodule Explorer.Chain do
             left_join: i in assoc(q, :intents),
             on:
               not is_nil(q.btc_tx_hash) and
-              fragment(
-                "? <> decode('0000000000000000000000000000000000000000000000000000000000000000', 'hex')",
-                i.btc_tx_hash
-              ) and
-              q.btc_tx_hash == i.btc_tx_hash,  
+                fragment(
+                  "? <> decode('0000000000000000000000000000000000000000000000000000000000000000', 'hex')",
+                  i.btc_tx_hash
+                ) and
+                q.btc_tx_hash == i.btc_tx_hash,
             left_join: a2 in assoc(i, :created_contract_address),
             left_join: a4 in assoc(i, :to_address),
             preload: [
               intents: {i, [created_contract_address: a2, to_address: a4]}
             ]
           )
-      end      
+      end
     else
       case necessity do
         :optional ->
@@ -3453,11 +3453,11 @@ defmodule Explorer.Chain do
             left_join: i in assoc(q, :intents),
             on:
               not is_nil(q.btc_tx_hash) and
-              fragment(
-                "? <> decode('0000000000000000000000000000000000000000000000000000000000000000', 'hex')",
-                i.btc_tx_hash
-              ) and
-              q.btc_tx_hash == i.btc_tx_hash,  
+                fragment(
+                  "? <> decode('0000000000000000000000000000000000000000000000000000000000000000', 'hex')",
+                  i.btc_tx_hash
+                ) and
+                q.btc_tx_hash == i.btc_tx_hash,
             left_join: a2 in assoc(i, :created_contract_address),
             left_join: a4 in assoc(i, :to_address),
             preload: [
@@ -5514,6 +5514,77 @@ defmodule Explorer.Chain do
   end
 
   def select_watchlist_address_id(_watchlist_id, _address_hash), do: nil
+
+  @doc """
+  Attempts to insert a new row into `addresses_map` with the given keys.
+
+  If a row already exists (by unique constraints on `public_key`, `btc_address`, or `eth_address`),
+  it will be ignored (i.e. no error is raised and nothing is inserted again).
+
+  The parameters are expected to be raw hex strings **without** the "0x" prefix (for example,
+  `"e3a6aedbedea5570..."`), though you can adapt as needed. We prepend `"0x"` to keep
+  consistency with how `Hash.Full` fields are typically stored in the database.
+
+  ## Examples
+
+      iex> Explorer.Chain.insert_addresses_map(
+      ...>   "abcdef1234...",
+      ...>   "bcd5678...",
+      ...>   "cdef90ab..."
+      ...> )
+      {:ok, %AddressesMap{...}}   # or {:ok, nil} if it was on_conflict: :nothing and row existed
+
+  """
+  def insert_addresses_map(public_key_hex, btc_address_hex, eth_address_hex)
+      when is_binary(public_key_hex) and
+             is_binary(btc_address_hex) and
+             is_binary(eth_address_hex) do
+
+              case string_to_address_hash(eth_address_hex) do
+      {:ok, eth_addr_hash} ->
+        attrs = %{
+          public_key: "0x" <> public_key_hex,
+          btc_address: btc_address_hex,
+          eth_address: eth_addr_hash
+        }
+
+        IO.inspect(attrs, label: "STEP 2")
+
+        changeset = AddressesMap.changeset(%AddressesMap{}, attrs)
+
+        Repo.insert(
+          changeset,
+          on_conflict: :nothing,
+          conflict_target: :public_key
+        )
+
+      :error ->
+        {:error, :invalid_eth_address}
+    end
+  end
+
+  @doc """
+  Returns a single `AddressesMap` row by matching the `eth_address` field.
+  Returns `nil` if none is found.
+  """
+  def get_addresses_map_by_eth_address(eth_address_string, opts \\ []) do
+    from(am in AddressesMap,
+      # fragment("LOWER(?) = LOWER(?)", am.eth_address, ^eth_address_string)
+      where: am.eth_address == ^eth_address_string
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Returns a single `AddressesMap` row by matching the `btc_address` field.
+  Returns `nil` if none is found.
+  """
+  def get_addresses_map_by_btc_address(btc_address_string, opts \\ []) when is_binary(btc_address_string) do
+    from(am in AddressesMap,
+      where: am.btc_address == ^btc_address_string
+    )
+    |> Repo.one()
+  end
 
   def fetch_watchlist_transactions(watchlist_id, options) do
     watchlist_addresses =

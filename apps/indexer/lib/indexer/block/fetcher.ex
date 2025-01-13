@@ -27,6 +27,8 @@ defmodule Indexer.Block.Fetcher do
   alias Indexer.Fetcher.Filecoin.AddressInfo, as: FilecoinAddressInfo
   alias Indexer.Fetcher.PolygonZkevm.BridgeL1Tokens, as: PolygonZkevmBridgeL1Tokens
   alias Indexer.Fetcher.TokenInstance.Realtime, as: TokenInstanceRealtime
+  alias Indexer.Util.BtcAddressUtil
+  alias Indexer.Util.EthAddressUtil
 
   alias Indexer.{Prometheus, TokenBalances, Tracer}
 
@@ -372,10 +374,98 @@ defmodule Indexer.Block.Fetcher do
         |> Map.put_new(:zilliqa_nested_quorum_certificates, %{params: zilliqa_nested_quorum_certificates})
       end
 
+    :midl ->
+      defp import_options(basic_import_options, %{transactions_with_receipts: transactions_with_receipts}) do
+        # 1) Catch MIDL transactions
+        # 2) Compute BTC address if public_key != nil
+        # 3) Just log the result
+        process_midl_transactions(transactions_with_receipts)
+        # Return the unmodified basic_import_options for now
+        basic_import_options
+      end
+
     _ ->
       defp import_options(basic_import_options, _) do
         basic_import_options
       end
+  end
+
+  defp process_midl_transactions(transactions) when is_list(transactions) do
+    Enum.each(transactions, fn tx ->
+      if not is_nil(Map.get(tx, :public_key)) do
+        # 1) Prepare the "pubkey_hex"
+        pubkey_hex =
+          tx
+          |> Map.get(:public_key, nil)
+          |> remove_0x_prefix_if_any()
+          || nil
+
+        # 2) Prepare "address_type_str" from btc_address_byte
+        address_type_str =
+          tx
+          |> Map.get(:btc_address_byte, nil)
+          |> remove_0x_prefix_if_any()
+          || "0"
+
+        # 3) Parse address_type
+        address_type =
+          case Integer.parse(address_type_str) do
+            {val, _} -> val
+            :error -> 0
+          end
+
+        # 4) Check if pubkey is empty or all zeroes
+        if not is_nil(pubkey_hex) and not is_zero_64?(pubkey_hex) do
+          btc_address = BtcAddressUtil.compute_btc_address(pubkey_hex, address_type)
+          eth_address = EthAddressUtil.get_evm_address(pubkey_hex)
+
+          if btc_address && eth_address do
+            Explorer.Chain.insert_addresses_map(pubkey_hex, btc_address, eth_address)
+          end
+
+          Logger.error("""
+          MIDL TX:
+            hash=#{tx.hash}
+            public_key=#{tx.public_key}
+            address_type=#{address_type}
+            -> computed BTC address=#{btc_address}
+          """)
+        end
+      end
+    end)
+  end
+
+  defp process_midl_transactions(_), do: :ok
+
+  defp is_zero_64?(str) when is_binary(str) do
+    String.length(str) == 64 and String.match?(str, ~r/^[0]+$/)
+  end
+
+  def remove_0x_prefix_if_any(nil), do: nil
+
+  @doc """
+    Midl RPC returns BTC parameters: `btc_tx_hash`, `public_key`, `btc_address_byte` with 0x prefix.
+    That is not consistent with the rest of the system, so we remove the prefix here.
+
+    The solution is temporary. Prefix should be cleaned on the RPC side or saving to DB side.
+  """
+  def remove_0x_prefix_if_any(%Explorer.Chain.Hash{} = hash_struct) do
+    # Convert the hash struct to a string, e.g. "0x9e48a19b..."
+    hashed_string = Explorer.Chain.Hash.to_string(hash_struct)
+
+    # If it starts with "0x", remove that prefix
+    case hashed_string do
+      "0x" <> rest -> rest
+      other -> other
+    end
+  end
+
+  def remove_0x_prefix_if_any(str) when is_binary(str) do
+    if String.starts_with?(str, "0x") do
+      String.slice(str, 2..-1//1)
+    else
+      str
+    end
   end
 
   defp extend_with_zilliqa_import_options(chain_type_import_options, fetched_blocks) do

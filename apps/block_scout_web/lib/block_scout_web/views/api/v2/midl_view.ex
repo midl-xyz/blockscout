@@ -1,13 +1,9 @@
 defmodule BlockScoutWeb.API.V2.MidlView do
   use BlockScoutWeb, :view
 
-  import Ecto.Query, only: [from: 2]
-
-  alias BlockScoutWeb.API.V2.Helper
-  alias Explorer.{Chain, Repo}
-  alias Explorer.Helper, as: ExplorerHelper
-  alias Explorer.Chain.{Block, Transaction}
-  alias Explorer.Chain.Optimism.{FrameSequence, FrameSequenceBlob, Withdrawal}
+  alias Explorer.Chain.{Transaction}
+  alias Indexer.Util.EthAddressUtil
+  alias Indexer.Util.BtcAddressUtil
 
   @doc """
     Extends the json output for a transaction adding MIDL-related info to the output.
@@ -37,7 +33,14 @@ defmodule BlockScoutWeb.API.V2.MidlView do
       if is_nil(pubkey_hex) or is_zero_64?(pubkey_hex) do
         nil
       else
-        MyBTC.compute_btc_address(pubkey_hex, address_type)
+        BtcAddressUtil.compute_btc_address(pubkey_hex, address_type)
+      end
+
+    eth_address =
+      if is_nil(pubkey_hex) or is_zero_64?(pubkey_hex) do
+        nil
+      else
+        EthAddressUtil.get_evm_address(pubkey_hex)
       end
 
     out_json
@@ -45,24 +48,25 @@ defmodule BlockScoutWeb.API.V2.MidlView do
     |> Map.put("public_key", pubkey_hex)
     |> Map.put("btc_address_byte", address_type_str)
     |> Map.put("btc_address", btc_address)
+    |> Map.put("eth_address", eth_address)
     |> Map.put("intents", map_intents(transaction.intents))
   end
 
-  @doc """
-  Checks if a 64-char hex string consists entirely of '0'.
-  E.g. "0000000000000000000000000000000000000000000000000000000000000000"
-  """
+  # Checks if a 64-char hex string consists entirely of '0'.
+  # E.g. "0000000000000000000000000000000000000000000000000000000000000000"
   defp is_zero_64?(str) when is_binary(str) do
     String.length(str) == 64 and String.match?(str, ~r/^[0]+$/)
   end
 
   defp map_intents(nil), do: []
+
   defp map_intents(intents) when is_list(intents) do
     Enum.map(intents, &map_intent_transaction/1)
   end
 
   defp map_intent_transaction(%Transaction{} = intent_tx) do
-    [decoded_input] = Transaction.decode_transactions([intent_tx], true, [api?: true])
+    [decoded_input] = Transaction.decode_transactions([intent_tx], true, api?: true)
+
     %{
       "method" => Transaction.method_name(intent_tx, decoded_input),
       "hash" => intent_tx.hash,
@@ -88,5 +92,4 @@ defmodule BlockScoutWeb.API.V2.MidlView do
       other -> other
     end
   end
-
 end

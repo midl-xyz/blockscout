@@ -31,6 +31,7 @@ defmodule BlockScoutWeb.API.V2.AddressController do
   alias Explorer.Chain.Address.Counters
   alias Explorer.Chain.Token.Instance
   alias Explorer.SmartContract.Helper, as: SmartContractHelper
+  alias Explorer.Chain.AddressesMap
 
   alias BlockScoutWeb.API.V2.CeloView
   alias Explorer.Chain.Celo.ElectionReward, as: CeloElectionReward
@@ -131,26 +132,61 @@ defmodule BlockScoutWeb.API.V2.AddressController do
   action_fallback(BlockScoutWeb.API.V2.FallbackController)
 
   def address(conn, %{"address_hash_param" => address_hash_string} = params) do
-    with {:ok, _address_hash, address} <- validate_address(address_hash_string, params, @address_options) do
-      fully_preloaded_address =
-        Address.maybe_preload_smart_contract_associations(address, @contract_address_preloads, @api_true)
+    if String.starts_with?(address_hash_string, "0x") do
+      case Chain.string_to_address_hash(address_hash_string) do
+        {:ok, eth_addr_hash} ->
+          maybe_btc = Chain.get_addresses_map_by_eth_address(eth_addr_hash)
+          do_render_via_eth_address(conn, address_hash_string, params, maybe_btc)
 
-      implementations = SmartContractHelper.pre_fetch_implementations(fully_preloaded_address)
+        :error ->
+          {:error, :invalid_eth_address}
+      end
+    else
+      case Chain.get_addresses_map_by_btc_address(address_hash_string) do
+        nil ->
+          send_resp(conn, 404, "BTC address not found")
 
-      CoinBalanceOnDemand.trigger_fetch(address)
-      ContractCodeOnDemand.trigger_fetch(address)
+        %AddressesMap{public_key: _pub, btc_address: _btc, eth_address: found_eth} = addr_map ->
+          eth_addr_str = Explorer.Chain.Hash.to_string(found_eth)
+          updated_params = Map.put(params, "address_hash_param", eth_addr_str)
+          do_render_via_eth_address(conn, eth_addr_str, updated_params, addr_map)
+      end
+    end
+  end
 
-      conn
-      |> put_status(200)
-      |> render(:address, %{
-        address:
-          %Address{fully_preloaded_address | proxy_implementations: implementations} |> maybe_preload_ens_to_address()
-      })
+  defp do_render_via_eth_address(conn, eth_address_string, params, addresses_map_struct) do
+    btc_addr = if addresses_map_struct, do: addresses_map_struct.btc_address, else: nil
+    case validate_address(eth_address_string, params, @address_options) do
+      {:ok, _parsed_address_hash, address} ->
+        fully_preloaded_address =
+          Address.maybe_preload_smart_contract_associations(address, @contract_address_preloads, @api_true)
+
+        implementations = SmartContractHelper.pre_fetch_implementations(fully_preloaded_address)
+
+        CoinBalanceOnDemand.trigger_fetch(address)
+        ContractCodeOnDemand.trigger_fetch(address)
+
+        address_with_metadata =
+          %Address{
+            fully_preloaded_address
+            | proxy_implementations: implementations,
+          }
+          |> maybe_preload_ens_to_address()
+
+        conn
+        |> put_status(200)
+        |> render(:address, %{address: address_with_metadata, btc_address: btc_addr})
+
+      _ ->
+        send_resp(conn, 404, "ETH address invalid or not found")
     end
   end
 
   def counters(conn, %{"address_hash_param" => address_hash_string} = params) do
-    with {:ok, _address_hash, address} <- validate_address(address_hash_string, params) do
+
+    {eth_addr, final_params} = map_btc_to_eth_address_if_needed(conn, address_hash_string, params)
+
+    with {:ok, _address_hash, address} <- validate_address(eth_addr, final_params) do
       {validation_count} = Counters.address_counters(address, @api_true)
 
       transactions_from_db = address.transactions_count || 0
@@ -167,7 +203,10 @@ defmodule BlockScoutWeb.API.V2.AddressController do
   end
 
   def token_balances(conn, %{"address_hash_param" => address_hash_string} = params) do
-    with {:ok, address_hash, _address} <- validate_address(address_hash_string, params) do
+
+    {eth_addr, final_params} = map_btc_to_eth_address_if_needed(conn, address_hash_string, params)
+
+    with {:ok, address_hash, _address} <- validate_address(eth_addr, final_params) do
       token_balances =
         address_hash
         |> Chain.fetch_last_token_balances(@api_true)
@@ -183,7 +222,10 @@ defmodule BlockScoutWeb.API.V2.AddressController do
   end
 
   def transactions(conn, %{"address_hash_param" => address_hash_string} = params) do
-    with {:ok, address_hash, _address} <- validate_address(address_hash_string, params) do
+
+    {eth_addr, final_params} = map_btc_to_eth_address_if_needed(conn, address_hash_string, params)
+
+    with {:ok, address_hash, _address} <- validate_address(eth_addr, final_params) do
       options =
         @transaction_necessity_by_association
         |> Keyword.merge(paging_options(params))
@@ -215,7 +257,10 @@ defmodule BlockScoutWeb.API.V2.AddressController do
         conn,
         %{"address_hash_param" => address_hash_string, "token" => token_address_hash_string} = params
       ) do
-    with {:ok, address_hash, _address} <- validate_address(address_hash_string, params),
+
+    {eth_addr, final_params} = map_btc_to_eth_address_if_needed(conn, address_hash_string, params)
+
+    with {:ok, address_hash, _address} <- validate_address(eth_addr, final_params),
          {:ok, token_address_hash, _token_address} <- validate_address(token_address_hash_string, params) do
       paging_options = paging_options(params)
 
@@ -258,7 +303,10 @@ defmodule BlockScoutWeb.API.V2.AddressController do
   end
 
   def token_transfers(conn, %{"address_hash_param" => address_hash_string} = params) do
-    with {:ok, address_hash, _address} <- validate_address(address_hash_string, params) do
+
+    {eth_addr, final_params} = map_btc_to_eth_address_if_needed(conn, address_hash_string, params)
+
+    with {:ok, address_hash, _address} <- validate_address(eth_addr, final_params) do
       paging_options = paging_options(params)
 
       options =
@@ -290,7 +338,10 @@ defmodule BlockScoutWeb.API.V2.AddressController do
   end
 
   def internal_transactions(conn, %{"address_hash_param" => address_hash_string} = params) do
-    with {:ok, address_hash, _address} <- validate_address(address_hash_string, params) do
+
+    {eth_addr, final_params} = map_btc_to_eth_address_if_needed(conn, address_hash_string, params)
+
+    with {:ok, address_hash, _address} <- validate_address(eth_addr, final_params) do
       full_options =
         [
           necessity_by_association: %{
@@ -321,7 +372,10 @@ defmodule BlockScoutWeb.API.V2.AddressController do
   end
 
   def logs(conn, %{"address_hash_param" => address_hash_string, "topic" => topic} = params) do
-    with {:ok, address_hash, _address} <- validate_address(address_hash_string, params) do
+
+    {eth_addr, final_params} = map_btc_to_eth_address_if_needed(conn, address_hash_string, params)
+
+    with {:ok, address_hash, _address} <- validate_address(eth_addr, final_params) do
       prepared_topic = String.trim(topic)
 
       formatted_topic = if String.starts_with?(prepared_topic, "0x"), do: prepared_topic, else: "0x" <> prepared_topic
@@ -354,7 +408,10 @@ defmodule BlockScoutWeb.API.V2.AddressController do
   end
 
   def logs(conn, %{"address_hash_param" => address_hash_string} = params) do
-    with {:ok, address_hash, _address} <- validate_address(address_hash_string, params) do
+
+    {eth_addr, final_params} = map_btc_to_eth_address_if_needed(conn, address_hash_string, params)
+
+    with {:ok, address_hash, _address} <- validate_address(eth_addr, final_params) do
       options = params |> paging_options() |> Keyword.merge(@api_true)
 
       results_plus_one = Chain.address_to_logs(address_hash, false, options)
@@ -374,7 +431,10 @@ defmodule BlockScoutWeb.API.V2.AddressController do
   end
 
   def blocks_validated(conn, %{"address_hash_param" => address_hash_string} = params) do
-    with {:ok, address_hash, _address} <- validate_address(address_hash_string, params) do
+
+    {eth_addr, final_params} = map_btc_to_eth_address_if_needed(conn, address_hash_string, params)
+
+    with {:ok, address_hash, _address} <- validate_address(eth_addr, final_params) do
       full_options =
         [
           necessity_by_association: %{
@@ -401,8 +461,11 @@ defmodule BlockScoutWeb.API.V2.AddressController do
   end
 
   def coin_balance_history(conn, %{"address_hash_param" => address_hash_string} = params) do
-    with {:format, {:ok, address_hash}} <- {:format, Chain.string_to_address_hash(address_hash_string)},
-         {:ok, false} <- AccessHelper.restricted_access?(address_hash_string, params),
+
+    {eth_addr, final_params} = map_btc_to_eth_address_if_needed(conn, address_hash_string, params)
+
+    with {:format, {:ok, address_hash}} <- {:format, Chain.string_to_address_hash(eth_addr)},
+         {:ok, false} <- AccessHelper.restricted_access?(eth_addr, final_params),
          {:not_found, {:ok, address}} <- {:not_found, Chain.hash_to_address(address_hash, @api_true, false)} do
       full_options = params |> paging_options() |> Keyword.merge(@api_true)
 
@@ -419,7 +482,10 @@ defmodule BlockScoutWeb.API.V2.AddressController do
   end
 
   def coin_balance_history_by_day(conn, %{"address_hash_param" => address_hash_string} = params) do
-    with {:ok, address_hash, _address} <- validate_address(address_hash_string, params) do
+
+    {eth_addr, final_params} = map_btc_to_eth_address_if_needed(conn, address_hash_string, params)
+
+    with {:ok, address_hash, _address} <- validate_address(eth_addr, final_params) do
       balances_by_day =
         address_hash
         |> Chain.address_to_balances_by_day(@api_true)
@@ -431,7 +497,10 @@ defmodule BlockScoutWeb.API.V2.AddressController do
   end
 
   def tokens(conn, %{"address_hash_param" => address_hash_string} = params) do
-    with {:ok, address_hash, _address} <- validate_address(address_hash_string, params) do
+
+    {eth_addr, final_params} = map_btc_to_eth_address_if_needed(conn, address_hash_string, params)
+
+    with {:ok, address_hash, _address} <- validate_address(eth_addr, final_params) do
       results_plus_one =
         address_hash
         |> Chain.fetch_paginated_last_token_balances(
@@ -462,7 +531,10 @@ defmodule BlockScoutWeb.API.V2.AddressController do
   end
 
   def withdrawals(conn, %{"address_hash_param" => address_hash_string} = params) do
-    with {:ok, address_hash, _address} <- validate_address(address_hash_string, params) do
+
+    {eth_addr, final_params} = map_btc_to_eth_address_if_needed(conn, address_hash_string, params)
+
+    with {:ok, address_hash, _address} <- validate_address(eth_addr, final_params) do
       options = @api_true |> Keyword.merge(paging_options(params))
       withdrawals_plus_one = address_hash |> Chain.address_hash_to_withdrawals(options)
       {withdrawals, next_page} = split_list_by_page(withdrawals_plus_one)
@@ -503,7 +575,10 @@ defmodule BlockScoutWeb.API.V2.AddressController do
   end
 
   def tabs_counters(conn, %{"address_hash_param" => address_hash_string} = params) do
-    with {:ok, address_hash, _address} <- validate_address(address_hash_string, params) do
+
+    {eth_addr, final_params} = map_btc_to_eth_address_if_needed(conn, address_hash_string, params)
+
+    with {:ok, address_hash, _address} <- validate_address(eth_addr, final_params) do
       counter_name_to_json_field_name = %{
         validations: :validations_count,
         transactions: :transactions_count,
@@ -537,7 +612,10 @@ defmodule BlockScoutWeb.API.V2.AddressController do
   end
 
   def nft_list(conn, %{"address_hash_param" => address_hash_string} = params) do
-    with {:ok, address_hash, _address} <- validate_address(address_hash_string, params) do
+
+    {eth_addr, final_params} = map_btc_to_eth_address_if_needed(conn, address_hash_string, params)
+
+    with {:ok, address_hash, _address} <- validate_address(eth_addr, final_params) do
       results_plus_one =
         Instance.nft_list(
           address_hash,
@@ -565,7 +643,10 @@ defmodule BlockScoutWeb.API.V2.AddressController do
   end
 
   def nft_collections(conn, %{"address_hash_param" => address_hash_string} = params) do
-    with {:ok, address_hash, _address} <- validate_address(address_hash_string, params) do
+
+    {eth_addr, final_params} = map_btc_to_eth_address_if_needed(conn, address_hash_string, params)
+
+    with {:ok, address_hash, _address} <- validate_address(eth_addr, final_params) do
       results_plus_one =
         Instance.nft_collections(
           address_hash,
@@ -596,7 +677,10 @@ defmodule BlockScoutWeb.API.V2.AddressController do
   Function to handle GET requests to `/api/v2/addresses/:address_hash_param/election-rewards` endpoint.
   """
   def celo_election_rewards(conn, %{"address_hash_param" => address_hash_string} = params) do
-    with {:ok, address_hash, _address} <- validate_address(address_hash_string, params) do
+
+    {eth_addr, final_params} = map_btc_to_eth_address_if_needed(conn, address_hash_string, params)
+
+    with {:ok, address_hash, _address} <- validate_address(eth_addr, final_params) do
       full_options =
         @celo_election_rewards_options
         |> Keyword.merge(CeloElectionReward.address_paging_options(params))
@@ -637,6 +721,24 @@ defmodule BlockScoutWeb.API.V2.AddressController do
          {:ok, false} <- AccessHelper.restricted_access?(address_hash_string, params),
          {:not_found, {:ok, address}} <- {:not_found, Chain.hash_to_address(address_hash, options, false)} do
       {:ok, address_hash, address}
+    end
+  end
+
+  defp map_btc_to_eth_address_if_needed(conn, address_hash_string, params) do
+    if String.starts_with?(address_hash_string, "0x") do
+      {address_hash_string, params}
+    else
+      case Chain.get_addresses_map_by_btc_address(address_hash_string) do
+        nil ->
+          conn
+          |> send_resp(404, "BTC address not found")
+          |> Plug.Conn.halt()
+
+        %AddressesMap{public_key: _pub, btc_address: _btc, eth_address: found_eth} ->
+          eth_addr_str = Explorer.Chain.Hash.to_string(found_eth)
+          updated_params = Map.put(params, "address_hash_param", eth_addr_str)
+          {eth_addr_str, updated_params}
+      end
     end
   end
 end

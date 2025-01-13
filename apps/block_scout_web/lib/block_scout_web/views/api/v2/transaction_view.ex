@@ -909,7 +909,7 @@ defmodule BlockScoutWeb.API.V2.TransactionView do
         transactions
       end
 
-      defp chain_type_fields(result, transaction, single_transaction?, conn, _watchlist_names) do
+      defp chain_type_fields(result, transaction, single_transaction?, _conn, _watchlist_names) do
         if single_transaction? do
           BlockScoutWeb.API.V2.MidlView.extend_transaction_json_response(result, transaction)
         else

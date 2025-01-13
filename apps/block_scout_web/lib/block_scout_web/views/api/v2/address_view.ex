@@ -17,8 +17,8 @@ defmodule BlockScoutWeb.API.V2.AddressView do
     ApiView.render("message.json", assigns)
   end
 
-  def render("address.json", %{address: address, conn: conn}) do
-    prepare_address(address, conn)
+  def render("address.json", %{address: address, conn: conn} = assigns) do
+    prepare_address(address, assigns)
   end
 
   def render("token_balances.json", %{token_balances: token_balances}) do
@@ -90,7 +90,9 @@ defmodule BlockScoutWeb.API.V2.AddressView do
   Prepares address properties for rendering in /addresses and /addresses/:address_hash_param API v2 endpoints
   """
   @spec prepare_address(Address.t(), Plug.Conn.t() | nil) :: map()
-  def prepare_address(address, conn \\ nil) do
+  def prepare_address(address, assigns) do
+    conn = Map.get(assigns, :conn)
+
     base_info = Helper.address_with_info(conn, address, address.hash, true)
 
     balance = address.fetched_coin_balance && address.fetched_coin_balance.value
@@ -121,7 +123,8 @@ defmodule BlockScoutWeb.API.V2.AddressView do
     extended_info
     |> chain_type_fields(%{
       address: address,
-      creation_transaction_from_address: creation_transaction && creation_transaction.from_address
+      creation_transaction_from_address: creation_transaction && creation_transaction.from_address,
+      btc_address: assigns[:btc_address]
     })
   end
 
@@ -260,6 +263,15 @@ defmodule BlockScoutWeb.API.V2.AddressView do
       defp chain_type_fields(result, %{address: address}) do
         # credo:disable-for-next-line Credo.Check.Design.AliasUsage
         BlockScoutWeb.API.V2.ZilliqaView.extend_address_json_response(result, address)
+      end
+
+    :midl ->
+      defp chain_type_fields(result, %{
+        address: _addr,
+        creation_transaction_from_address: _creator,
+        btc_address: maybe_btc
+      }) do
+        Map.put(result, "btc_address", maybe_btc)
       end
 
     _ ->
