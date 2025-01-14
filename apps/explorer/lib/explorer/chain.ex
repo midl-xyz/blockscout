@@ -3449,24 +3449,67 @@ defmodule Explorer.Chain do
 
   @spec join_association(atom() | Ecto.Query.t(), atom(), :optional | :required) :: Ecto.Query.t()
   def join_association(query, association, necessity) do
-    if association == :intents and Application.get_env(:explorer, :chain_type) == :midl do
+    if (association == :intents or association == :completion_transaction or association == :initiation_transaction or
+          association == :committed_send_event) and Application.get_env(:explorer, :chain_type) == :midl do
       case necessity do
         :optional ->
-          from(q in query,
-            left_join: i in assoc(q, :intents),
-            on:
-              not is_nil(q.btc_tx_hash) and
-                fragment(
-                  "? <> decode('0000000000000000000000000000000000000000000000000000000000000000', 'hex')",
-                  i.btc_tx_hash
-                ) and
-                q.btc_tx_hash == i.btc_tx_hash,
-            left_join: a2 in assoc(i, :created_contract_address),
-            left_join: a4 in assoc(i, :to_address),
-            preload: [
-              intents: {i, [created_contract_address: a2, to_address: a4]}
-            ]
-          )
+          cond do
+            association == :intents ->
+              from(q in query,
+                left_join: i in assoc(q, :intents),
+                on:
+                  not is_nil(q.btc_tx_hash) and
+                    fragment(
+                      "? <> decode('0000000000000000000000000000000000000000000000000000000000000000', 'hex')",
+                      i.btc_tx_hash
+                    ) and
+                    q.btc_tx_hash == i.btc_tx_hash,
+                left_join: a2 in assoc(i, :created_contract_address),
+                left_join: a4 in assoc(i, :to_address),
+                preload: [
+                  intents: {i, [created_contract_address: a2, to_address: a4]}
+                ]
+              )
+
+            association == :completion_transaction ->
+              from(q in query,
+                left_join: ct in assoc(q, :completion_transaction),
+                on:
+                  not is_nil(q.btc_tx_hash) and
+                    fragment(
+                      "? <> decode('0000000000000000000000000000000000000000000000000000000000000000', 'hex')",
+                      ct.btc_dapp_tx
+                    ) and
+                    q.btc_tx_hash == ct.btc_dapp_tx,
+                preload: [:completion_transaction]
+              )
+
+            association == :initiation_transaction ->
+              from(q in query,
+                left_join: ct in assoc(q, :initiation_transaction),
+                on:
+                  not is_nil(q.btc_tx_hash) and
+                    fragment(
+                      "? <> decode('0000000000000000000000000000000000000000000000000000000000000000', 'hex')",
+                      ct.btc_dapp_tx
+                    ) and
+                    q.btc_tx_hash == ct.btc_dapp_tx,
+                preload: [:initiation_transaction]
+              )
+
+            association == :committed_send_event ->
+              from(q in query,
+                left_join: ct in assoc(q, :committed_send_event),
+                on:
+                  not is_nil(q.btc_tx_hash) and
+                    fragment(
+                      "? <> decode('0000000000000000000000000000000000000000000000000000000000000000', 'hex')",
+                      ct.btc_dapp_tx
+                    ) and
+                    q.btc_tx_hash == ct.btc_dapp_tx,
+                preload: [:committed_send_event]
+              )
+          end
       end
     else
       case necessity do
@@ -5624,11 +5667,12 @@ defmodule Explorer.Chain do
 
       changeset = InitiationTransaction.changeset(%InitiationTransaction{}, attrs)
 
-      result = Repo.insert(
-        changeset,
-        on_conflict: :nothing,
-        conflict_target: :btc_dapp_tx
-      )
+      result =
+        Repo.insert(
+          changeset,
+          on_conflict: :nothing,
+          conflict_target: :btc_dapp_tx
+        )
     else
       :error ->
         {:error, :btc_dapp_tx}

@@ -43,13 +43,34 @@ defmodule BlockScoutWeb.API.V2.MidlView do
         EthAddressUtil.get_evm_address(pubkey_hex)
       end
 
+    completion_tx =
+      case Map.get(transaction, :completion_transaction) do
+        %{} = completion_transaction -> completion_transaction.completion_tx
+        _ -> nil
+      end
+
+    initiation_tx =
+      case Map.get(transaction, :initiation_transaction) do
+        %{} = initiation_transaction -> initiation_transaction.initiation_tx
+        _ -> nil
+      end
+
+    btc_result_tx =
+      case Map.get(transaction, :committed_send_event) do
+        %{} = committed_send_event -> committed_send_event.btc_result_tx
+        _ -> nil
+      end
+
     out_json
-    |> Map.put("btc_tx_hash", remove_0x_prefix_if_any(transaction.btc_tx_hash))
+    |> Map.put("btc_dapp_tx", remove_0x_prefix_if_any(transaction.btc_tx_hash))
     |> Map.put("public_key", pubkey_hex)
     |> Map.put("btc_address_byte", address_type_str)
     |> Map.put("btc_address", btc_address)
     |> Map.put("eth_address", eth_address)
     |> Map.put("intents", map_intents(transaction.intents))
+    |> Map.put("completion_tx", completion_tx)
+    |> Map.put("initiation_tx", initiation_tx)
+    |> Map.put("btc_result_tx", remove_0x_prefix_if_any(btc_result_tx))
   end
 
   # Checks if a 64-char hex string consists entirely of '0'.

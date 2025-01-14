@@ -162,6 +162,9 @@ defmodule BlockScoutWeb.API.V2.TransactionController do
         :midl ->
           necessity_by_association_with_actions
           |> Map.put(:intents, :optional)
+          |> Map.put(:completion_transaction, :optional)
+          |> Map.put(:initiation_transaction, :optional)
+          |> Map.put(:committed_send_event, :optional)
 
         _ ->
           necessity_by_association_with_actions
