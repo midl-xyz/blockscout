@@ -50,6 +50,8 @@ defmodule Explorer.Chain do
     AddressesMap,
     Block,
     BlockNumberHelper,
+    CommittedSentEvent,
+    CompletionTransaction,
     CurrencyHelper,
     Data,
     DecompiledSmartContract,
@@ -57,6 +59,7 @@ defmodule Explorer.Chain do
     Hash,
     Import,
     InternalTransaction,
+    InitiationTransaction,
     Log,
     PendingBlockOperation,
     SmartContract,
@@ -5539,16 +5542,13 @@ defmodule Explorer.Chain do
       when is_binary(public_key_hex) and
              is_binary(btc_address_hex) and
              is_binary(eth_address_hex) do
-
-              case string_to_address_hash(eth_address_hex) do
+    case string_to_address_hash(eth_address_hex) do
       {:ok, eth_addr_hash} ->
         attrs = %{
           public_key: "0x" <> public_key_hex,
           btc_address: btc_address_hex,
           eth_address: eth_addr_hash
         }
-
-        IO.inspect(attrs, label: "STEP 2")
 
         changeset = AddressesMap.changeset(%AddressesMap{}, attrs)
 
@@ -5584,6 +5584,78 @@ defmodule Explorer.Chain do
       where: am.btc_address == ^btc_address_string
     )
     |> Repo.one()
+  end
+
+  def insert_committed_sent_event(btc_dapp_tx, committed_event_tx, btc_result_tx)
+      when is_binary(btc_dapp_tx) and
+             is_binary(committed_event_tx) and
+             is_binary(btc_result_tx) do
+    with {:ok, btc_dapp_tx_hash} <- string_to_transaction_hash(btc_dapp_tx),
+         {:ok, committed_event_tx_hash} <- string_to_transaction_hash(committed_event_tx),
+         {:ok, btc_result_tx_hash} <- string_to_transaction_hash(btc_result_tx) do
+      attrs = %{
+        btc_dapp_tx: btc_dapp_tx_hash,
+        committed_event_tx: committed_event_tx_hash,
+        btc_result_tx: btc_result_tx_hash
+      }
+
+      changeset = CommittedSentEvent.changeset(%CommittedSentEvent{}, attrs)
+
+      Repo.insert(
+        changeset,
+        on_conflict: :nothing,
+        conflict_target: :btc_dapp_tx
+      )
+    else
+      :error ->
+        {:error, :btc_dapp_tx}
+    end
+  end
+
+  def insert_initiantion_tx(btc_dapp_tx, initiation_tx)
+      when is_binary(btc_dapp_tx) and
+             is_binary(initiation_tx) do
+    with {:ok, btc_dapp_tx_hash} <- string_to_transaction_hash(btc_dapp_tx),
+         {:ok, initiation_tx_hash} <- string_to_transaction_hash(initiation_tx) do
+      attrs = %{
+        btc_dapp_tx: btc_dapp_tx_hash,
+        initiation_tx: initiation_tx_hash
+      }
+
+      changeset = InitiationTransaction.changeset(%InitiationTransaction{}, attrs)
+
+      result = Repo.insert(
+        changeset,
+        on_conflict: :nothing,
+        conflict_target: :btc_dapp_tx
+      )
+    else
+      :error ->
+        {:error, :btc_dapp_tx}
+    end
+  end
+
+  def insert_completion_tx(btc_dapp_tx, completion_tx)
+      when is_binary(btc_dapp_tx) and
+             is_binary(completion_tx) do
+    with {:ok, btc_dapp_tx_hash} <- string_to_transaction_hash(btc_dapp_tx),
+         {:ok, completion_tx_hash} <- string_to_transaction_hash(completion_tx) do
+      attrs = %{
+        btc_dapp_tx: btc_dapp_tx_hash,
+        completion_tx: completion_tx_hash
+      }
+
+      changeset = CompletionTransaction.changeset(%CompletionTransaction{}, attrs)
+
+      Repo.insert(
+        changeset,
+        on_conflict: :nothing,
+        conflict_target: :btc_dapp_tx
+      )
+    else
+      :error ->
+        {:error, :btc_dapp_tx}
+    end
   end
 
   def fetch_watchlist_transactions(watchlist_id, options) do
