@@ -174,6 +174,9 @@ defmodule Indexer.Block.Fetcher do
          token_transfers = token_transfers ++ celo_native_token_transfers,
          tokens = Enum.uniq(tokens ++ celo_tokens),
          %{transaction_actions: transaction_actions} = TransactionActions.parse(logs),
+         committed_sent_events = Indexer.Transform.CommittedSentEvent.parse(logs),
+         initiation_txs = Indexer.Transform.InitiationTransaction.parse(logs),
+         completion_txs = Indexer.Transform.CompletionTransaction.parse(logs),
          %{mint_transfers: mint_transfers} = MintTransfers.parse(logs),
          optimism_withdrawals =
            if(callback_module == Indexer.Block.Realtime.Fetcher, do: OptimismWithdrawals.parse(logs), else: []),
@@ -283,6 +286,9 @@ defmodule Indexer.Block.Fetcher do
       update_addresses_cache(inserted[:addresses])
       update_uncles_cache(inserted[:block_second_degree_relations])
       update_withdrawals_cache(inserted[:withdrawals])
+      update_committed_events(committed_sent_events)
+      update_inititation_txs(initiation_txs)
+      update_completion_txs(completion_txs)
 
       update_multichain_search_db(%{
         addresses: inserted[:addresses],
@@ -423,13 +429,6 @@ defmodule Indexer.Block.Fetcher do
             Explorer.Chain.insert_addresses_map(pubkey_hex, btc_address, eth_address)
           end
 
-          Logger.error("""
-          MIDL TX:
-            hash=#{tx.hash}
-            public_key=#{tx.public_key}
-            address_type=#{address_type}
-            -> computed BTC address=#{btc_address}
-          """)
         end
       end
     end)
@@ -502,6 +501,56 @@ defmodule Indexer.Block.Fetcher do
   defp update_withdrawals_cache([_ | _] = withdrawals) do
     %{index: index} = List.last(withdrawals)
     Chain.upsert_count_withdrawals(index)
+  end
+
+  defp update_committed_events(committed_events) do
+    Enum.each(committed_events, fn %{
+           btc_dapp_tx: btc_dapp_tx,
+           committed_event_tx: committed_event_tx,
+           btc_result_tx: btc_result_tx
+         } ->
+      case Explorer.Chain.insert_committed_sent_event(btc_dapp_tx, committed_event_tx, btc_result_tx) do
+        {:ok, _result} ->
+          :ok
+
+        {:error, reason} ->
+          Logger.error("Failed to insert CommittedSentEvent: #{inspect(reason)}")
+      end
+    end)
+  end
+
+  defp update_inititation_txs(initiation_txs) when is_map(initiation_txs) do
+    update_inititation_txs([initiation_txs])
+  end
+
+  defp update_inititation_txs(initiation_txs) when is_list(initiation_txs) do
+    Enum.each(initiation_txs, fn %{
+            btc_dapp_tx: btc_dapp_tx,
+            initiation_tx: initiation_tx
+          } ->
+      case Explorer.Chain.insert_initiantion_tx(btc_dapp_tx, initiation_tx) do
+        {:ok, _result} -> :ok
+        {:error, reason} -> Logger.error("Failed to insert Initiation TX: #{inspect(reason)}")
+      end
+    end)
+  end
+
+  defp update_completion_txs(completion_txs) when is_map(completion_txs) do
+    update_completion_txs([completion_txs])
+  end
+
+  defp update_completion_txs(completion_txs) when is_list(completion_txs) do
+    Enum.each(completion_txs, fn %{
+           btc_dapp_tx: btc_dapp_tx,
+           completion_tx: completion_tx
+         } ->
+      case Explorer.Chain.insert_completion_tx(btc_dapp_tx, completion_tx) do
+        {:ok, _result} ->
+          :ok
+        {:error, reason} ->
+          Logger.error("Failed to insert Completion TRX: #{inspect(reason)}")
+      end
+    end)
   end
 
   defp update_withdrawals_cache(_) do

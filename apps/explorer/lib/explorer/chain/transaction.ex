@@ -13,9 +13,12 @@ defmodule Explorer.Chain.Transaction.Schema do
     Address,
     Beacon.BlobTransaction,
     Block,
+    CompletionTransaction,
+    CommittedSentEvent,
     Data,
     Hash,
     InternalTransaction,
+    InitiationTransaction,
     Log,
     SignedAuthorization,
     TokenTransfer,
@@ -44,6 +47,22 @@ defmodule Explorer.Chain.Transaction.Schema do
                                 foreign_key: :btc_tx_hash,
                                 references: :btc_tx_hash
                               )
+
+                              has_one(:completion_transaction, CompletionTransaction,
+                                foreign_key: :btc_dapp_tx,
+                                references: :btc_tx_hash
+                              )
+
+                              has_one(:initiation_transaction, InitiationTransaction,
+                                foreign_key: :btc_dapp_tx,
+                                references: :btc_tx_hash
+                              )
+
+                              has_one(:committed_send_event, CommittedSentEvent,
+                                foreign_key: :btc_dapp_tx,
+                                references: :btc_tx_hash
+                              )
+
                             end,
                             2
                           )
