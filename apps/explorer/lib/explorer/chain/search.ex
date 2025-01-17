@@ -205,13 +205,15 @@ defmodule Explorer.Chain.Search do
     labels_query = search_label_query(term, paging_options)
 
     btc_address_map_query = search_btc_address_map_query(term, paging_options)
+    btc_tx_hash_map_query = search_btc_dapp_tx_query(term, paging_options)
 
     from(
       tokens in subquery(tokens_query_certified),
       union_all: ^tokens_query_not_certified,
       union_all: ^contracts_query,
       union_all: ^labels_query,
-      union_all: ^btc_address_map_query
+      union_all: ^btc_address_map_query,
+      union_all: ^btc_tx_hash_map_query
     )
   end
 
@@ -343,7 +345,9 @@ defmodule Explorer.Chain.Search do
 
     btc_address_map_query = term |> search_btc_address_map_query(paging_options) |> select_repo(options).all()
 
-    [tokens_results, contracts_results, labels_query, btc_address_map_query]
+    btc_tx_hash_map_query = term |> search_btc_dapp_tx_query(paging_options) |> select_repo(options).all()
+
+    [tokens_results, contracts_results, labels_query, btc_address_map_query, btc_tx_hash_map_query]
   end
 
   defp await_ens_task(ens_task) do
@@ -373,16 +377,13 @@ defmodule Explorer.Chain.Search do
   defp search_btc_address_map_query(term, paging_options) do
     address_map_search_fields =
       search_fields()
-
       |> Map.put(:address_hash, dynamic([am], am.eth_address))
       |> Map.put(:type, "address")
       |> Map.put(:name, dynamic([am], am.btc_address))
       |> Map.put(:inserted_at, dynamic([am], am.inserted_at))
-
       |> Map.put(:verified, false)
       |> Map.put(:certified, false)
       |> Map.put(:timestamp, nil)
-
       |> Map.put(:priority, 0)
 
     base_query =
@@ -399,6 +400,44 @@ defmodule Explorer.Chain.Search do
     base_query
     |> limit(^paging_options.page_size)
   end
+
+  defp search_btc_dapp_tx_query(term, paging_options) do
+    transaction_search_fields =
+      search_fields()
+      |> Map.put(:transaction_hash, dynamic([transaction], transaction.hash))
+      |> Map.put(:block_hash, dynamic([transaction], transaction.block_hash))
+      |> Map.put(:type, "transaction")
+      |> Map.put(:block_number, dynamic([transaction], transaction.block_number))
+      |> Map.put(:inserted_at, dynamic([transaction], transaction.inserted_at))
+      |> Map.put(:timestamp, dynamic([transaction], transaction.block_timestamp))
+
+    search_term = "0x" <> String.replace_suffix(term, ":*", "")
+
+    case safe_decode(search_term) do
+      {:ok, search_binary} ->
+        base_query =
+          from(transaction in Transaction,
+            where: transaction.btc_tx_hash == ^search_binary,
+            select: ^transaction_search_fields
+          )
+
+        base_query
+        |> limit(^paging_options.page_size)
+
+      :error ->
+        from(transaction in Transaction, where: false)
+    end
+  end
+
+  defp safe_decode("0x" <> hex) do
+    try do
+      {:ok, Base.decode16!(hex, case: :mixed)}
+    rescue
+      _ -> :error
+    end
+  end
+
+  defp safe_decode(_), do: :error
 
   defp search_label_query(term, paging_options) do
     label_search_fields =
