@@ -16,8 +16,8 @@ defmodule Indexer.Transform.InitiationTransaction do
 
   defp parse_event(log) do
     # Acknowledged(bytes32 txHash, address from, uint256 btcAmount)
-    case decode_data(log.data, [:address, {:uint, 256}]) do
-      [from, btc_amount] ->
+    case decode_data(log.data, [{:uint, 256}]) do
+      [btc_amount] ->
 
         tx_hash = if Map.has_key?(log, :second_topic) and not is_nil(log.second_topic), do: log.second_topic, else: nil
 

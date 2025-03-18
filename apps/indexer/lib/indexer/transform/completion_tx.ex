@@ -15,11 +15,8 @@ defmodule Indexer.Transform.CompletionTransaction do
   end
 
   defp parse_event(log) do
-    # Completed(uint256,bytes32,address,bytes32,uint256,bytes32[],uint256[])
     # Completed(bytes32,address,bytes32,bytes32,uint256,bytes32[],uint256[])
     case decode_data(log.data, [
-          #  {:bytes, 32},
-          #  :address,
            {:bytes, 32},
            {:bytes, 32},
            {:uint, 256},
