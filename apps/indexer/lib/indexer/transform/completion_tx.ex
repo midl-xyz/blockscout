@@ -16,22 +16,31 @@ defmodule Indexer.Transform.CompletionTransaction do
 
   defp parse_event(log) do
     # Completed(uint256,bytes32,address,bytes32,uint256,bytes32[],uint256[])
+    # Completed(bytes32,address,bytes32,bytes32,uint256,bytes32[],uint256[])
     case decode_data(log.data, [
-           {:uint, 256},
+          #  {:bytes, 32},
+          #  :address,
            {:bytes, 32},
-           :address,
            {:bytes, 32},
            {:uint, 256},
            {:array, {:bytes, 32}},
            {:array, {:uint, 256}}
          ]) do
-      [block_num, tx_hash, sender, receiver, btc_amount, assets, amounts] ->
-        parse_data = %{
-          btc_dapp_tx: encode_address_hash(tx_hash),
-          completion_tx: log.transaction_hash
-        }
+      [receiver, receiver_btc, btc_amount, assets, amounts] ->
 
-        parse_data
+        tx_hash = if Map.has_key?(log, :second_topic) and not is_nil(log.second_topic), do: log.second_topic, else: nil
+
+        if tx_hash do
+          parse_data = %{
+            btc_dapp_tx: tx_hash,
+            completion_tx: log.transaction_hash
+          }
+
+          parse_data
+        else
+          Logger.error("Missing txHash in topics: #{inspect(log)}")
+          nil
+        end
 
       _ ->
         Logger.error("Failed to decode log data: #{inspect(log)}")

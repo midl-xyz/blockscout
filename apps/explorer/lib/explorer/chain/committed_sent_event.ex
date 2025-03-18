@@ -2,7 +2,7 @@ defmodule Explorer.Chain.CommittedSentEvent do
   use Ecto.Schema
   alias Explorer.Chain.Hash
 
-  @committed_sent_tx_event "0xcc2248fcfb39192e7e0dc644a25f3cd639b1bba3f7fadb7d3c72371dca1bb7d0"
+  @committed_sent_tx_event "0xf0468fb310be61a54cbe3a6ea9c441e606428b24743c6d13fcfe67315fd1e7f7"
 
   @primary_key false
   schema "committed_send_event" do

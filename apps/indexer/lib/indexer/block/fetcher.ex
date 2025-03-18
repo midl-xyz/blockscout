@@ -175,8 +175,8 @@ defmodule Indexer.Block.Fetcher do
          tokens = Enum.uniq(tokens ++ celo_tokens),
          %{transaction_actions: transaction_actions} = TransactionActions.parse(logs),
          committed_sent_events = Indexer.Transform.CommittedSentEvent.parse(logs),
-         initiation_txs = Indexer.Transform.InitiationTransaction.parse(logs),
-         completion_txs = Indexer.Transform.CompletionTransaction.parse(logs),
+        #  initiation_txs = Indexer.Transform.InitiationTransaction.parse(logs),
+        #  completion_txs = Indexer.Transform.CompletionTransaction.parse(logs),
          %{mint_transfers: mint_transfers} = MintTransfers.parse(logs),
          optimism_withdrawals =
            if(callback_module == Indexer.Block.Realtime.Fetcher, do: OptimismWithdrawals.parse(logs), else: []),
@@ -287,8 +287,8 @@ defmodule Indexer.Block.Fetcher do
       update_uncles_cache(inserted[:block_second_degree_relations])
       update_withdrawals_cache(inserted[:withdrawals])
       update_committed_events(committed_sent_events)
-      update_inititation_txs(initiation_txs)
-      update_completion_txs(completion_txs)
+      # update_inititation_txs(initiation_txs)
+      # update_completion_txs(completion_txs)
 
       update_multichain_search_db(%{
         addresses: inserted[:addresses],

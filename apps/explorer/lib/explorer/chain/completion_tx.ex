@@ -2,7 +2,7 @@ defmodule Explorer.Chain.CompletionTransaction do
   use Ecto.Schema
   alias Explorer.Chain.Hash
 
-  @completed_event "0xbbdf168724c4a0edc444765b54953d7f83095921f5cdfa32ef89cae2c08b2022"
+  @completed_event "0xa9328e6d80574934143ced4592651423ae77152e7a141060d8e1dfcc13bfd656"
 
   @primary_key false
   schema "completion_transaction" do

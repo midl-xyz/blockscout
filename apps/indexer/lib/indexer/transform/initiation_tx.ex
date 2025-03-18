@@ -16,14 +16,22 @@ defmodule Indexer.Transform.InitiationTransaction do
 
   defp parse_event(log) do
     # Acknowledged(bytes32 txHash, address from, uint256 btcAmount)
-    case decode_data(log.data, [{:bytes, 32}, :address, {:uint, 256}]) do
-      [tx_hash, from, btc_amount] ->
-        parse_data = %{
-          btc_dapp_tx: encode_address_hash(tx_hash),
-          initiation_tx: log.transaction_hash
-        }
+    case decode_data(log.data, [:address, {:uint, 256}]) do
+      [from, btc_amount] ->
 
-        parse_data
+        tx_hash = if Map.has_key?(log, :second_topic) and not is_nil(log.second_topic), do: log.second_topic, else: nil
+
+        if tx_hash do
+          parse_data = %{
+            btc_dapp_tx: tx_hash,
+            initiation_tx: log.transaction_hash
+          }
+
+          parse_data
+        else
+          Logger.error("Missing txHash in topics: #{inspect(log)}")
+          nil
+        end
 
       _ ->
         Logger.error("Failed to decode log data: #{inspect(log)}")

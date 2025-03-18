@@ -15,15 +15,24 @@ defmodule Indexer.Transform.CommittedSentEvent do
   end
 
   defp parse_event(log) do
-    case decode_data(log.data, [{:uint, 256}, {:bytes, 32}, {:bytes, 32}, {:bytes, 32}]) do
-      [block_num, tx_hash, sent_txs_batch_hash, receiver] ->
-        parse_data = %{
-          btc_dapp_tx: encode_address_hash(tx_hash),
-          committed_event_tx: log.transaction_hash,
-          btc_result_tx: encode_address_hash(sent_txs_batch_hash)
-        }
+    case decode_data(log.data, [{:bytes, 32}, {:bytes, 32}]) do
+      [sent_txs_batch_hash, receiver] ->
 
-        parse_data
+        tx_hash = if Map.has_key?(log, :second_topic) and not is_nil(log.second_topic), do: log.second_topic, else: nil
+
+        if tx_hash do
+          parse_data = %{
+            btc_dapp_tx: tx_hash,
+            committed_event_tx: log.transaction_hash,
+            btc_result_tx: encode_address_hash(sent_txs_batch_hash)
+          }
+
+          parse_data
+        else
+          Logger.error("Missing txHash in topics: #{inspect(log)}")
+          nil
+        end
+
       _ ->
         Logger.error("Failed to decode log data: #{inspect(log)}")
         nil
