@@ -15,7 +15,7 @@ defmodule Indexer.Transform.CompletionTransaction do
   end
 
   defp parse_event(log) do
-    # Completed(bytes32,address,bytes32,bytes32,uint256,bytes32[],uint256[])
+    # Completed(address,bytes32,bytes32,uint256,bytes32[],uint256[])
     case decode_data(log.data, [
            {:bytes, 32},
            {:bytes, 32},
@@ -25,7 +25,17 @@ defmodule Indexer.Transform.CompletionTransaction do
          ]) do
       [receiver, receiver_btc, btc_amount, assets, amounts] ->
 
+        # todo: remove later
+        Logger.error("Completed event catched. Processing is ongoing. #{inspect(log)}")
+        Logger.error("Processing is ongoing. receiver: #{inspect(receiver)}")
+        Logger.error("Processing is ongoing. receiver_btc: #{inspect(receiver_btc)}")
+        Logger.error("Processing is ongoing. btc_amount: #{inspect(btc_amount)}")
+        Logger.error("Processing is ongoing. assets: #{inspect(assets)}")
+        Logger.error("Processing is ongoing. amounts: #{inspect(amounts)}")
+
         tx_hash = if Map.has_key?(log, :second_topic) and not is_nil(log.second_topic), do: log.second_topic, else: nil
+
+        Logger.error("Processing is ongoing. amounts: #{inspect(tx_hash)}")
 
         if tx_hash do
           parse_data = %{
