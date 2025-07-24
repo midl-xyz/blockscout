@@ -25,7 +25,8 @@ defmodule Indexer.Transform.CommittedSentEvent do
           parse_data = %{
             btc_dapp_tx: tx_hash,
             committed_event_tx: log.transaction_hash,
-            btc_result_tx: encode_address_hash(sent_txs_batch_hash)
+            btc_result_tx: encode_address_hash(sent_txs_batch_hash),
+            receiver: receiver
           }
 
           parse_data

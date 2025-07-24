@@ -504,17 +504,22 @@ defmodule Indexer.Block.Fetcher do
   end
 
   defp update_committed_events(committed_events) do
-    Enum.each(committed_events, fn %{
-           btc_dapp_tx: btc_dapp_tx,
-           committed_event_tx: committed_event_tx,
-           btc_result_tx: btc_result_tx
-         } ->
-      case Explorer.Chain.insert_committed_sent_event(btc_dapp_tx, committed_event_tx, btc_result_tx) do
-        {:ok, _result} ->
-          :ok
+    Enum.each(committed_events, fn event ->
+      btc_dapp_tx = Map.get(event, :btc_dapp_tx)
+      committed_event_tx = Map.get(event, :committed_event_tx)
+      btc_result_tx = Map.get(event, :btc_result_tx)
+      receiver = Map.get(event, :receiver)
 
-        {:error, reason} ->
-          Logger.error("Failed to insert CommittedSentEvent: #{inspect(reason)}")
+      if receiver do
+        case Explorer.Chain.insert_committed_sent_event(btc_dapp_tx, committed_event_tx, btc_result_tx, receiver) do
+          {:ok, _result} ->
+            :ok
+
+          {:error, reason} ->
+            Logger.error("Failed to insert CommittedSentEvent: #{inspect(reason)}")
+        end
+      else
+        Logger.error("Missing receiver in CommittedSentEvent: #{inspect(event)}")
       end
     end)
   end

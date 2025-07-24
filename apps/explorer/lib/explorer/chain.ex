@@ -5629,17 +5629,27 @@ defmodule Explorer.Chain do
     |> Repo.one()
   end
 
-  def insert_committed_sent_event(btc_dapp_tx, committed_event_tx, btc_result_tx)
+  defp parse_address_hash(receiver) when is_binary(receiver) do
+    case byte_size(receiver) do
+      20 -> Hash.Address.load(receiver)
+      _ -> string_to_address_hash(receiver)
+    end
+  end
+
+  def insert_committed_sent_event(btc_dapp_tx, committed_event_tx, btc_result_tx, receiver)
       when is_binary(btc_dapp_tx) and
              is_binary(committed_event_tx) and
-             is_binary(btc_result_tx) do
+             is_binary(btc_result_tx) and
+             is_binary(receiver) do
     with {:ok, btc_dapp_tx_hash} <- string_to_transaction_hash(btc_dapp_tx),
          {:ok, committed_event_tx_hash} <- string_to_transaction_hash(committed_event_tx),
-         {:ok, btc_result_tx_hash} <- string_to_transaction_hash(btc_result_tx) do
+         {:ok, btc_result_tx_hash} <- string_to_transaction_hash(btc_result_tx),
+         {:ok, receiver_hash} <- parse_address_hash(receiver) do
       attrs = %{
         btc_dapp_tx: btc_dapp_tx_hash,
         committed_event_tx: committed_event_tx_hash,
-        btc_result_tx: btc_result_tx_hash
+        btc_result_tx: btc_result_tx_hash,
+        receiver: receiver_hash
       }
 
       changeset = CommittedSentEvent.changeset(%CommittedSentEvent{}, attrs)

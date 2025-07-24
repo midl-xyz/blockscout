@@ -9,11 +9,12 @@ defmodule Explorer.Chain.CommittedSentEvent do
     field(:btc_dapp_tx, Hash.Full, primary_key: true)
     field(:committed_event_tx, Hash.Full)
     field(:btc_result_tx, Hash.Full)
+    field(:receiver, Hash.Address)
 
     timestamps()
   end
 
-  @required_fields ~w(btc_dapp_tx committed_event_tx btc_result_tx)a
+  @required_fields ~w(btc_dapp_tx committed_event_tx btc_result_tx receiver)a
   @optional_fields []
 
   def committed_sent_tx_event, do: @committed_sent_tx_event
