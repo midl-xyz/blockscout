@@ -5636,6 +5636,13 @@ defmodule Explorer.Chain do
     end
   end
 
+  defp parse_full_hash(hash) when is_binary(hash) do
+    case byte_size(hash) do
+      32 -> Hash.Full.load(hash)
+      _ -> string_to_transaction_hash(hash)
+    end
+  end
+
   def insert_committed_sent_event(btc_dapp_tx, committed_event_tx, btc_result_tx, receiver)
       when is_binary(btc_dapp_tx) and
              is_binary(committed_event_tx) and
@@ -5689,14 +5696,17 @@ defmodule Explorer.Chain do
     end
   end
 
-  def insert_completion_tx(btc_dapp_tx, completion_tx)
+  def insert_completion_tx(btc_dapp_tx, completion_tx, receiver)
       when is_binary(btc_dapp_tx) and
-             is_binary(completion_tx) do
+             is_binary(completion_tx) and
+             is_binary(receiver) do
     with {:ok, btc_dapp_tx_hash} <- string_to_transaction_hash(btc_dapp_tx),
-         {:ok, completion_tx_hash} <- string_to_transaction_hash(completion_tx) do
+         {:ok, completion_tx_hash} <- string_to_transaction_hash(completion_tx),
+         {:ok, receiver_hash} <- parse_full_hash(receiver) do
       attrs = %{
         btc_dapp_tx: btc_dapp_tx_hash,
-        completion_tx: completion_tx_hash
+        completion_tx: completion_tx_hash,
+        receiver: receiver_hash
       }
 
       changeset = CompletionTransaction.changeset(%CompletionTransaction{}, attrs)

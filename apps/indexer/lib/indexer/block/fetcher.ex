@@ -545,15 +545,20 @@ defmodule Indexer.Block.Fetcher do
   end
 
   defp update_completion_txs(completion_txs) when is_list(completion_txs) do
-    Enum.each(completion_txs, fn %{
-           btc_dapp_tx: btc_dapp_tx,
-           completion_tx: completion_tx
-         } ->
-      case Explorer.Chain.insert_completion_tx(btc_dapp_tx, completion_tx) do
-        {:ok, _result} ->
-          :ok
-        {:error, reason} ->
-          Logger.error("Failed to insert Completion TRX: #{inspect(reason)}")
+    Enum.each(completion_txs, fn event ->
+      btc_dapp_tx = Map.get(event, :btc_dapp_tx)
+      completion_tx = Map.get(event, :completion_tx)
+      receiver = Map.get(event, :receiver)
+
+      if receiver do
+        case Explorer.Chain.insert_completion_tx(btc_dapp_tx, completion_tx, receiver) do
+          {:ok, _result} ->
+            :ok
+          {:error, reason} ->
+            Logger.error("Failed to insert Completion TRX: #{inspect(reason)}")
+        end
+      else
+        Logger.error("Missing receiver in CompletionTransaction: #{inspect(event)}")
       end
     end)
   end

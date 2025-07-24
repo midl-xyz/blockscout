@@ -25,22 +25,16 @@ defmodule Indexer.Transform.CompletionTransaction do
          ]) do
       [receiver, receiver_btc, btc_amount, assets, amounts] ->
 
-        # todo: remove later
-        Logger.error("Completed event catched. Processing is ongoing. #{inspect(log)}")
-        Logger.error("Processing is ongoing. receiver: #{inspect(receiver)}")
-        Logger.error("Processing is ongoing. receiver_btc: #{inspect(receiver_btc)}")
-        Logger.error("Processing is ongoing. btc_amount: #{inspect(btc_amount)}")
-        Logger.error("Processing is ongoing. assets: #{inspect(assets)}")
-        Logger.error("Processing is ongoing. amounts: #{inspect(amounts)}")
-
         tx_hash = if Map.has_key?(log, :second_topic) and not is_nil(log.second_topic), do: log.second_topic, else: nil
 
-        Logger.error("Processing is ongoing. amounts: #{inspect(tx_hash)}")
-
         if tx_hash do
+
+          final_receiver = if is_receiver_valid?(receiver_btc), do: receiver_btc, else: receiver
+
           parse_data = %{
             btc_dapp_tx: tx_hash,
-            completion_tx: log.transaction_hash
+            completion_tx: log.transaction_hash,
+            receiver: final_receiver
           }
 
           parse_data
@@ -58,4 +52,10 @@ defmodule Indexer.Transform.CompletionTransaction do
   defp encode_address_hash(binary) do
     "0x" <> Base.encode16(binary, case: :lower)
   end
+
+  # Check if receiver is valid (not null and not all zeros)
+  defp is_receiver_valid?(nil), do: false
+  defp is_receiver_valid?(<<0::256>>), do: false
+  defp is_receiver_valid?(receiver) when is_binary(receiver) and byte_size(receiver) == 32, do: true
+  defp is_receiver_valid?(_), do: false
 end
