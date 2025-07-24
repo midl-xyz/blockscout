@@ -176,7 +176,7 @@ defmodule Indexer.Block.Fetcher do
          %{transaction_actions: transaction_actions} = TransactionActions.parse(logs),
          committed_sent_events = Indexer.Transform.CommittedSentEvent.parse(logs),
          initiation_txs = Indexer.Transform.InitiationTransaction.parse(logs),
-         completion_txs = Indexer.Transform.CompletionTransaction.parse(logs),
+         completion_txs = Indexer.Transform.CompletionTransaction.parse(logs, transactions_with_receipts),
          %{mint_transfers: mint_transfers} = MintTransfers.parse(logs),
          optimism_withdrawals =
            if(callback_module == Indexer.Block.Realtime.Fetcher, do: OptimismWithdrawals.parse(logs), else: []),
@@ -548,17 +548,17 @@ defmodule Indexer.Block.Fetcher do
     Enum.each(completion_txs, fn event ->
       btc_dapp_tx = Map.get(event, :btc_dapp_tx)
       completion_tx = Map.get(event, :completion_tx)
-      receiver = Map.get(event, :receiver)
+      sender = Map.get(event, :sender)
 
-      if receiver do
-        case Explorer.Chain.insert_completion_tx(btc_dapp_tx, completion_tx, receiver) do
+      if sender do
+        case Explorer.Chain.insert_completion_tx(btc_dapp_tx, completion_tx, sender) do
           {:ok, _result} ->
             :ok
           {:error, reason} ->
             Logger.error("Failed to insert Completion TRX: #{inspect(reason)}")
         end
       else
-        Logger.error("Missing receiver in CompletionTransaction: #{inspect(event)}")
+        Logger.error("Missing sender in CompletionTransaction: #{inspect(event)}")
       end
     end)
   end

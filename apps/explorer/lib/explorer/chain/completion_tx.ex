@@ -8,12 +8,12 @@ defmodule Explorer.Chain.CompletionTransaction do
   schema "completion_transaction" do
     field(:btc_dapp_tx, Hash.Full, primary_key: true)
     field(:completion_tx, Hash.Full)
-    field(:receiver, Hash.Full)
+    field(:sender, Hash.Address)
 
     timestamps()
   end
 
-  @required_fields ~w(btc_dapp_tx completion_tx receiver)a
+  @required_fields ~w(btc_dapp_tx completion_tx sender)a
   @optional_fields []
 
   def completed_event, do: @completed_event
