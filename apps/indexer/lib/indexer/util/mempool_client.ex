@@ -112,8 +112,22 @@ defmodule Indexer.Util.MempoolClient do
 
   @doc """
   Gets the mempool base URL from environment configuration.
+  Raises an error if MEMPOOL_BASE_URL environment variable is not set.
   """
   defp mempool_base_url do
-    Application.get_env(:indexer, :mempool_base_url, "https://mempool.regtest.midl.xyz")
+    case Application.get_env(:indexer, :mempool_base_url) do
+      nil ->
+        raise """
+        MEMPOOL_BASE_URL environment variable is required but not set.
+        Please set MEMPOOL_BASE_URL to your mempool API base URL (e.g., https://mempool.regtest.midl.xyz)
+        """
+      "" ->
+        raise """
+        MEMPOOL_BASE_URL environment variable is empty.
+        Please set MEMPOOL_BASE_URL to your mempool API base URL (e.g., https://mempool.regtest.midl.xyz)
+        """
+      url ->
+        url
+    end
   end
 end

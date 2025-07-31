@@ -749,7 +749,7 @@ config :indexer,
   graceful_shutdown_period: ConfigHelper.parse_time_env_var("INDEXER_GRACEFUL_SHUTDOWN_PERIOD", "5m"),
   internal_transactions_fetch_order:
     ConfigHelper.parse_catalog_value("INDEXER_INTERNAL_TRANSACTIONS_FETCH_ORDER", ["asc", "desc"], true, "asc"),
-  mempool_base_url: System.get_env("MEMPOOL_BASE_URL", "https://mempool.regtest.midl.xyz")
+  mempool_base_url: System.get_env("MEMPOOL_BASE_URL")
 
 config :indexer, :ipfs,
   gateway_url: System.get_env("IPFS_GATEWAY_URL", "https://ipfs.io/ipfs"),
