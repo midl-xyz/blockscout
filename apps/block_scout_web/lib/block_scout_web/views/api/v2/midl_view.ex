@@ -1,9 +1,15 @@
 defmodule BlockScoutWeb.API.V2.MidlView do
   use BlockScoutWeb, :view
 
-  alias Explorer.Chain.{Transaction}
+  alias Explorer.Chain.{Transaction, AddressesMap}
+  alias Explorer.Chain
+  alias Explorer.Repo
   alias Indexer.Util.EthAddressUtil
   alias Indexer.Util.BtcAddressUtil
+
+  import Ecto.Query, only: [from: 2]
+
+  require Logger
 
   @doc """
     Extends the json output for a transaction adding MIDL-related info to the output.
@@ -33,7 +39,16 @@ defmodule BlockScoutWeb.API.V2.MidlView do
       if is_nil(pubkey_hex) or is_zero_64?(pubkey_hex) do
         nil
       else
-        BtcAddressUtil.compute_btc_address(pubkey_hex, address_type)
+        case get_btc_address_from_map(pubkey_hex) do
+          nil ->
+            Logger.warning("MidlView: BTC address not found in addresses_map for pubkey: #{String.slice(pubkey_hex, 0, 10)}..., computing fallback")
+            computed_address = BtcAddressUtil.compute_btc_address(pubkey_hex, address_type)
+            Logger.warning("MidlView: Using computed fallback BTC address: #{computed_address}")
+            computed_address
+          stored_address ->
+            Logger.info("MidlView: Found BTC address in addresses_map: #{stored_address} for pubkey: #{String.slice(pubkey_hex, 0, 10)}...")
+            stored_address
+        end
       end
 
     eth_address =
@@ -113,4 +128,37 @@ defmodule BlockScoutWeb.API.V2.MidlView do
       other -> other
     end
   end
+
+  @doc """
+  Looks up BTC address from addresses_map table using public key.
+  Returns the stored BTC address or nil if not found.
+  """
+    defp get_btc_address_from_map(pubkey_hex) when is_binary(pubkey_hex) do
+    # Add 0x prefix for lookup since it's stored with prefix in the database
+    pubkey_with_prefix = "0x" <> pubkey_hex
+
+    case Chain.string_to_transaction_hash(pubkey_with_prefix) do
+      {:ok, pubkey_hash} ->
+        result = Repo.one(
+          from(am in AddressesMap,
+            where: am.public_key == ^pubkey_hash,
+            select: am.btc_address
+          )
+        )
+
+        case result do
+          nil ->
+            Logger.debug("MidlView: No addresses_map entry found for pubkey: #{String.slice(pubkey_hex, 0, 10)}...")
+            nil
+          btc_address ->
+            Logger.debug("MidlView: Found addresses_map entry for pubkey: #{String.slice(pubkey_hex, 0, 10)}..., BTC address: #{btc_address}")
+            btc_address
+        end
+      :error ->
+        Logger.error("MidlView: Invalid public key format: #{String.slice(pubkey_hex, 0, 10)}...")
+        nil
+    end
+  end
+
+  defp get_btc_address_from_map(_), do: nil
 end

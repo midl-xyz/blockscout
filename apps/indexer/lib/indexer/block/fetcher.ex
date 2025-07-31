@@ -29,6 +29,7 @@ defmodule Indexer.Block.Fetcher do
   alias Indexer.Fetcher.TokenInstance.Realtime, as: TokenInstanceRealtime
   alias Indexer.Util.BtcAddressUtil
   alias Indexer.Util.EthAddressUtil
+  alias Indexer.Util.MempoolClient
 
   alias Indexer.{Prometheus, TokenBalances, Tracer}
 
@@ -397,6 +398,7 @@ defmodule Indexer.Block.Fetcher do
   end
 
   defp process_midl_transactions(transactions) when is_list(transactions) do
+    Logger.info("MIDL Fetcher: Starting to process #{length(transactions)} transactions")
     Enum.each(transactions, fn tx ->
       if not is_nil(Map.get(tx, :public_key)) do
         # 1) Prepare the "pubkey_hex"
@@ -422,11 +424,41 @@ defmodule Indexer.Block.Fetcher do
 
         # 4) Check if pubkey is empty or all zeroes
         if not is_nil(pubkey_hex) and not is_zero_64?(pubkey_hex) do
-          btc_address = BtcAddressUtil.compute_btc_address(pubkey_hex, address_type)
+          Logger.debug("MIDL Fetcher: Processing transaction with pubkey: #{String.slice(pubkey_hex, 0, 10)}... and address_type: #{address_type}")
+
+          # Get BTC addresses from mempool if btc_tx_hash is available, otherwise compute it
+          btc_address =
+            case Map.get(tx, :btc_tx_hash) do
+              nil ->
+                Logger.warning("MIDL Fetcher: No btc_tx_hash found, falling back to computed BTC address for pubkey: #{String.slice(pubkey_hex, 0, 10)}...")
+                computed_address = BtcAddressUtil.compute_btc_address(pubkey_hex, address_type)
+                Logger.debug("MIDL Fetcher: Computed BTC address: #{computed_address}")
+                computed_address
+              btc_tx_hash ->
+                Logger.debug("MIDL Fetcher: Found btc_tx_hash: #{btc_tx_hash}, attempting mempool lookup")
+                clean_btc_tx_hash = remove_0x_prefix_if_any(btc_tx_hash)
+                Logger.debug("MIDL Fetcher: Clean btc_tx_hash: #{clean_btc_tx_hash}")
+
+                case MempoolClient.get_btc_address_from_mempool(clean_btc_tx_hash) do
+                  nil ->
+                    Logger.warning("MIDL Fetcher: Mempool lookup failed for #{clean_btc_tx_hash}, falling back to computed address")
+                    computed_address = BtcAddressUtil.compute_btc_address(pubkey_hex, address_type)
+                    Logger.warning("MIDL Fetcher: Using computed fallback BTC address: #{computed_address} for pubkey: #{String.slice(pubkey_hex, 0, 10)}...")
+                    computed_address
+                  address ->
+                    Logger.debug("MIDL Fetcher: Successfully got BTC address from mempool: #{address}")
+                    address
+                end
+            end
+
           eth_address = EthAddressUtil.get_evm_address(pubkey_hex)
+          Logger.debug("MIDL Fetcher: Generated ETH address: #{eth_address}")
 
           if btc_address && eth_address do
+            Logger.debug("MIDL Fetcher: Inserting address mapping - BTC: #{btc_address}, ETH: #{eth_address}, Pubkey: #{String.slice(pubkey_hex, 0, 10)}...")
             Explorer.Chain.insert_addresses_map(pubkey_hex, btc_address, eth_address)
+          else
+            Logger.warning("MIDL Fetcher: Failed to generate valid addresses - BTC: #{inspect(btc_address)}, ETH: #{inspect(eth_address)}")
           end
 
         end
