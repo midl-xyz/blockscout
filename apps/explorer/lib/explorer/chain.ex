@@ -5629,17 +5629,34 @@ defmodule Explorer.Chain do
     |> Repo.one()
   end
 
-  def insert_committed_sent_event(btc_dapp_tx, committed_event_tx, btc_result_tx)
+  defp parse_address_hash(receiver) when is_binary(receiver) do
+    case byte_size(receiver) do
+      20 -> Hash.Address.load(receiver)
+      _ -> string_to_address_hash(receiver)
+    end
+  end
+
+  defp parse_full_hash(hash) when is_binary(hash) do
+    case byte_size(hash) do
+      32 -> Hash.Full.load(hash)
+      _ -> string_to_transaction_hash(hash)
+    end
+  end
+
+  def insert_committed_sent_event(btc_dapp_tx, committed_event_tx, btc_result_tx, receiver)
       when is_binary(btc_dapp_tx) and
              is_binary(committed_event_tx) and
-             is_binary(btc_result_tx) do
+             is_binary(btc_result_tx) and
+             is_binary(receiver) do
     with {:ok, btc_dapp_tx_hash} <- string_to_transaction_hash(btc_dapp_tx),
          {:ok, committed_event_tx_hash} <- string_to_transaction_hash(committed_event_tx),
-         {:ok, btc_result_tx_hash} <- string_to_transaction_hash(btc_result_tx) do
+         {:ok, btc_result_tx_hash} <- string_to_transaction_hash(btc_result_tx),
+         {:ok, receiver_hash} <- parse_address_hash(receiver) do
       attrs = %{
         btc_dapp_tx: btc_dapp_tx_hash,
         committed_event_tx: committed_event_tx_hash,
-        btc_result_tx: btc_result_tx_hash
+        btc_result_tx: btc_result_tx_hash,
+        receiver: receiver_hash
       }
 
       changeset = CommittedSentEvent.changeset(%CommittedSentEvent{}, attrs)
@@ -5679,14 +5696,18 @@ defmodule Explorer.Chain do
     end
   end
 
-  def insert_completion_tx(btc_dapp_tx, completion_tx)
+  def insert_completion_tx(btc_dapp_tx, completion_tx, sender)
       when is_binary(btc_dapp_tx) and
-             is_binary(completion_tx) do
+             is_binary(completion_tx) and
+             is_binary(sender) do
     with {:ok, btc_dapp_tx_hash} <- string_to_transaction_hash(btc_dapp_tx),
-         {:ok, completion_tx_hash} <- string_to_transaction_hash(completion_tx) do
+         {:ok, completion_tx_hash} <- string_to_transaction_hash(completion_tx),
+         {:ok, sender_hash} <- parse_address_hash(sender) do
+
       attrs = %{
         btc_dapp_tx: btc_dapp_tx_hash,
-        completion_tx: completion_tx_hash
+        completion_tx: completion_tx_hash,
+        sender: sender_hash
       }
 
       changeset = CompletionTransaction.changeset(%CompletionTransaction{}, attrs)

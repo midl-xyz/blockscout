@@ -29,6 +29,7 @@ defmodule Indexer.Block.Fetcher do
   alias Indexer.Fetcher.TokenInstance.Realtime, as: TokenInstanceRealtime
   alias Indexer.Util.BtcAddressUtil
   alias Indexer.Util.EthAddressUtil
+  alias Indexer.Util.MempoolClient
 
   alias Indexer.{Prometheus, TokenBalances, Tracer}
 
@@ -176,7 +177,7 @@ defmodule Indexer.Block.Fetcher do
          %{transaction_actions: transaction_actions} = TransactionActions.parse(logs),
          committed_sent_events = Indexer.Transform.CommittedSentEvent.parse(logs),
          initiation_txs = Indexer.Transform.InitiationTransaction.parse(logs),
-         completion_txs = Indexer.Transform.CompletionTransaction.parse(logs),
+         completion_txs = Indexer.Transform.CompletionTransaction.parse(logs, transactions_with_receipts),
          %{mint_transfers: mint_transfers} = MintTransfers.parse(logs),
          optimism_withdrawals =
            if(callback_module == Indexer.Block.Realtime.Fetcher, do: OptimismWithdrawals.parse(logs), else: []),
@@ -397,6 +398,7 @@ defmodule Indexer.Block.Fetcher do
   end
 
   defp process_midl_transactions(transactions) when is_list(transactions) do
+    Logger.info("MIDL Fetcher: Starting to process #{length(transactions)} transactions")
     Enum.each(transactions, fn tx ->
       if not is_nil(Map.get(tx, :public_key)) do
         # 1) Prepare the "pubkey_hex"
@@ -422,11 +424,41 @@ defmodule Indexer.Block.Fetcher do
 
         # 4) Check if pubkey is empty or all zeroes
         if not is_nil(pubkey_hex) and not is_zero_64?(pubkey_hex) do
-          btc_address = BtcAddressUtil.compute_btc_address(pubkey_hex, address_type)
+          Logger.debug("MIDL Fetcher: Processing transaction with pubkey: #{String.slice(pubkey_hex, 0, 10)}... and address_type: #{address_type}")
+
+          # Get BTC addresses from mempool if btc_tx_hash is available, otherwise compute it
+          btc_address =
+            case Map.get(tx, :btc_tx_hash) do
+              nil ->
+                Logger.warning("MIDL Fetcher: No btc_tx_hash found, falling back to computed BTC address for pubkey: #{String.slice(pubkey_hex, 0, 10)}...")
+                computed_address = BtcAddressUtil.compute_btc_address(pubkey_hex, address_type)
+                Logger.debug("MIDL Fetcher: Computed BTC address: #{computed_address}")
+                computed_address
+              btc_tx_hash ->
+                Logger.debug("MIDL Fetcher: Found btc_tx_hash: #{btc_tx_hash}, attempting mempool lookup")
+                clean_btc_tx_hash = remove_0x_prefix_if_any(btc_tx_hash)
+                Logger.debug("MIDL Fetcher: Clean btc_tx_hash: #{clean_btc_tx_hash}")
+
+                case MempoolClient.get_btc_address_from_mempool(clean_btc_tx_hash) do
+                  nil ->
+                    Logger.warning("MIDL Fetcher: Mempool lookup failed for #{clean_btc_tx_hash}, falling back to computed address")
+                    computed_address = BtcAddressUtil.compute_btc_address(pubkey_hex, address_type)
+                    Logger.warning("MIDL Fetcher: Using computed fallback BTC address: #{computed_address} for pubkey: #{String.slice(pubkey_hex, 0, 10)}...")
+                    computed_address
+                  address ->
+                    Logger.debug("MIDL Fetcher: Successfully got BTC address from mempool: #{address}")
+                    address
+                end
+            end
+
           eth_address = EthAddressUtil.get_evm_address(pubkey_hex)
+          Logger.debug("MIDL Fetcher: Generated ETH address: #{eth_address}")
 
           if btc_address && eth_address do
+            Logger.debug("MIDL Fetcher: Inserting address mapping - BTC: #{btc_address}, ETH: #{eth_address}, Pubkey: #{String.slice(pubkey_hex, 0, 10)}...")
             Explorer.Chain.insert_addresses_map(pubkey_hex, btc_address, eth_address)
+          else
+            Logger.warning("MIDL Fetcher: Failed to generate valid addresses - BTC: #{inspect(btc_address)}, ETH: #{inspect(eth_address)}")
           end
 
         end
@@ -504,17 +536,22 @@ defmodule Indexer.Block.Fetcher do
   end
 
   defp update_committed_events(committed_events) do
-    Enum.each(committed_events, fn %{
-           btc_dapp_tx: btc_dapp_tx,
-           committed_event_tx: committed_event_tx,
-           btc_result_tx: btc_result_tx
-         } ->
-      case Explorer.Chain.insert_committed_sent_event(btc_dapp_tx, committed_event_tx, btc_result_tx) do
-        {:ok, _result} ->
-          :ok
+    Enum.each(committed_events, fn event ->
+      btc_dapp_tx = Map.get(event, :btc_dapp_tx)
+      committed_event_tx = Map.get(event, :committed_event_tx)
+      btc_result_tx = Map.get(event, :btc_result_tx)
+      receiver = Map.get(event, :receiver)
 
-        {:error, reason} ->
-          Logger.error("Failed to insert CommittedSentEvent: #{inspect(reason)}")
+      if receiver do
+        case Explorer.Chain.insert_committed_sent_event(btc_dapp_tx, committed_event_tx, btc_result_tx, receiver) do
+          {:ok, _result} ->
+            :ok
+
+          {:error, reason} ->
+            Logger.error("Failed to insert CommittedSentEvent: #{inspect(reason)}")
+        end
+      else
+        Logger.error("Missing receiver in CommittedSentEvent: #{inspect(event)}")
       end
     end)
   end
@@ -540,15 +577,20 @@ defmodule Indexer.Block.Fetcher do
   end
 
   defp update_completion_txs(completion_txs) when is_list(completion_txs) do
-    Enum.each(completion_txs, fn %{
-           btc_dapp_tx: btc_dapp_tx,
-           completion_tx: completion_tx
-         } ->
-      case Explorer.Chain.insert_completion_tx(btc_dapp_tx, completion_tx) do
-        {:ok, _result} ->
-          :ok
-        {:error, reason} ->
-          Logger.error("Failed to insert Completion TRX: #{inspect(reason)}")
+    Enum.each(completion_txs, fn event ->
+      btc_dapp_tx = Map.get(event, :btc_dapp_tx)
+      completion_tx = Map.get(event, :completion_tx)
+      sender = Map.get(event, :sender)
+
+      if sender do
+        case Explorer.Chain.insert_completion_tx(btc_dapp_tx, completion_tx, sender) do
+          {:ok, _result} ->
+            :ok
+          {:error, reason} ->
+            Logger.error("Failed to insert Completion TRX: #{inspect(reason)}")
+        end
+      else
+        Logger.error("Missing sender in CompletionTransaction: #{inspect(event)}")
       end
     end)
   end

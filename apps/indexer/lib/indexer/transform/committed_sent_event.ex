@@ -15,7 +15,8 @@ defmodule Indexer.Transform.CommittedSentEvent do
   end
 
   defp parse_event(log) do
-    case decode_data(log.data, [{:bytes, 32}, {:bytes, 32}]) do
+    # CommittedSentTx(bytes32,bytes32,address)
+    case decode_data(log.data, [{:bytes, 32}, :address]) do
       [sent_txs_batch_hash, receiver] ->
 
         tx_hash = if Map.has_key?(log, :second_topic) and not is_nil(log.second_topic), do: log.second_topic, else: nil
@@ -24,7 +25,8 @@ defmodule Indexer.Transform.CommittedSentEvent do
           parse_data = %{
             btc_dapp_tx: tx_hash,
             committed_event_tx: log.transaction_hash,
-            btc_result_tx: encode_address_hash(sent_txs_batch_hash)
+            btc_result_tx: encode_address_hash(sent_txs_batch_hash),
+            receiver: receiver
           }
 
           parse_data
