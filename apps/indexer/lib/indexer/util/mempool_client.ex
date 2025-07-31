@@ -42,7 +42,9 @@ defmodule Indexer.Util.MempoolClient do
       {"Content-Type", "application/json"}
     ]
 
-    case HTTPoison.get(url, headers, recv_timeout: 30_000) do
+    http_adapter = Application.get_env(:explorer, :http_adapter, HTTPoison)
+
+    case http_adapter.get(url, headers, recv_timeout: 30_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
         Logger.debug("MempoolClient: Received 200 response, body length: #{String.length(body)}")
         case Jason.decode(body) do
