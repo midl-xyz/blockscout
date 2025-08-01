@@ -451,7 +451,7 @@ defmodule Indexer.Block.Fetcher do
                 end
             end
 
-          eth_address = EthAddressUtil.get_evm_address(pubkey_hex)
+          eth_address = Map.get(tx, :from_address_hash)
           Logger.debug("MIDL Fetcher: Generated ETH address: #{eth_address}")
 
           if btc_address && eth_address do

@@ -55,7 +55,16 @@ defmodule BlockScoutWeb.API.V2.MidlView do
       if is_nil(pubkey_hex) or is_zero_64?(pubkey_hex) do
         nil
       else
-        EthAddressUtil.get_evm_address(pubkey_hex)
+        case get_eth_address_from_map(pubkey_hex) do
+          nil ->
+            Logger.warning("MidlView: ETH address not found in addresses_map for pubkey: #{String.slice(pubkey_hex, 0, 10)}..., computing fallback")
+            computed_address = EthAddressUtil.get_evm_address(pubkey_hex)
+            Logger.warning("MidlView: Using computed fallback ETH address: #{computed_address}")
+            computed_address
+          stored_address ->
+            Logger.info("MidlView: Found ETH address in addresses_map: #{stored_address} for pubkey: #{String.slice(pubkey_hex, 0, 10)}...")
+            stored_address
+        end
       end
 
     completion_tx =
@@ -161,4 +170,35 @@ defmodule BlockScoutWeb.API.V2.MidlView do
   end
 
   defp get_btc_address_from_map(_), do: nil
+
+  """
+  Get ETH address from addresses_map by public key
+  """
+  defp get_eth_address_from_map(pubkey_hex) when is_binary(pubkey_hex) do
+    pubkey_with_prefix = "0x" <> pubkey_hex
+
+    case Chain.string_to_transaction_hash(pubkey_with_prefix) do
+      {:ok, pubkey_hash} ->
+        result = Repo.one(
+          from(am in AddressesMap,
+            where: am.public_key == ^pubkey_hash,
+            select: am.eth_address
+          )
+        )
+
+        case result do
+          nil ->
+            Logger.debug("MidlView: No addresses_map entry found for pubkey: #{String.slice(pubkey_hex, 0, 10)}...")
+            nil
+          eth_address ->
+            Logger.debug("MidlView: Found addresses_map entry for pubkey: #{String.slice(pubkey_hex, 0, 10)}..., ETH address: #{eth_address}")
+            eth_address
+        end
+      :error ->
+        Logger.error("MidlView: Invalid public key format: #{String.slice(pubkey_hex, 0, 10)}...")
+        nil
+    end
+  end
+
+  defp get_eth_address_from_map(_), do: nil
 end
