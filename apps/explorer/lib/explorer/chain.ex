@@ -5661,11 +5661,17 @@ defmodule Explorer.Chain do
 
       changeset = CommittedSentEvent.changeset(%CommittedSentEvent{}, attrs)
 
-      Repo.insert(
-        changeset,
-        on_conflict: :nothing,
-        conflict_target: :btc_dapp_tx
-      )
+      case Repo.insert(changeset, on_conflict: :nothing, conflict_target: :btc_dapp_tx) do
+        {:ok, result} -> {:ok, result}
+        {:error, %Ecto.Changeset{errors: errors}} ->
+          if Enum.any?(errors, fn {field, {msg, _}} ->
+            field in [:btc_result_tx, :committed_event_tx] and String.contains?(msg, "has already been taken")
+          end) do
+            {:ok, :ignored}
+          else
+            {:error, %Ecto.Changeset{errors: errors}}
+          end
+      end
     else
       :error ->
         {:error, :btc_dapp_tx}
