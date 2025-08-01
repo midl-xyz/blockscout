@@ -13,13 +13,13 @@ defmodule Indexer.Util.MempoolClient do
   Returns the BTC address string or nil if not found/error occurs.
   """
   def get_btc_address_from_mempool(btc_tx_hash) when is_binary(btc_tx_hash) do
-    Logger.info("MempoolClient: Fetching BTC address for tx_hash: #{btc_tx_hash}")
+    Logger.debug("MempoolClient: Fetching BTC address for tx_hash: #{btc_tx_hash}")
 
     case fetch_transaction_from_mempool(btc_tx_hash) do
       {:ok, transaction_data} ->
         Logger.debug("MempoolClient: Successfully fetched transaction data for #{btc_tx_hash}")
         result = extract_btc_address_from_transaction(transaction_data)
-        Logger.info("MempoolClient: Extracted BTC address: #{inspect(result)} for tx_hash: #{btc_tx_hash}")
+        Logger.debug("MempoolClient: Extracted BTC address: #{inspect(result)} for tx_hash: #{btc_tx_hash}")
         result
 
       {:error, reason} ->
@@ -91,7 +91,7 @@ defmodule Indexer.Util.MempoolClient do
     Logger.debug("MempoolClient: Extracting address from first input: #{inspect(first_input)}")
     case first_input do
       %{"prevout" => %{"scriptpubkey_address" => address}} when is_binary(address) ->
-        Logger.info("MempoolClient: Successfully extracted BTC address: #{address}")
+        Logger.debug("MempoolClient: Successfully extracted BTC address: #{address}")
         address
       %{"prevout" => prevout} ->
         Logger.warning("MempoolClient: No scriptpubkey_address found in prevout. Available keys: #{inspect(Map.keys(prevout))}")
