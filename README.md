@@ -78,6 +78,30 @@ This section documents the mapping between transaction fields returned by the AP
 | `initiation_tx` | `initiation_transaction.initiation_tx` | Initiation event transaction hash, mapped by btc_dapp_tx |
 | `btc_result_tx` | `committed_send_event.btc_result_tx` | Result Bitcoin transaction from committed event logs, mapped by btc_dapp_tx |
 
+### TODO: Address Calculation Updates for P2WPKH Support
+
+**Issue**: The current `btc_from` / `btc_address` and `eth_address` field calculations need to be updated to properly support P2WPKH (Pay-to-Witness-Public-Key-Hash) format.
+
+**Required Changes**:
+
+1. **BTC Address Calculation for P2WPKH**: 
+   - Concatenate `btcAddressByte` (from transaction fields) + `pubKey`
+   - Pass `"btcAddressByte"+"pubKey"` to BTC address calculation instead of just `pubKey`
+
+2. **EVM Address Calculation**: 
+   - Update EVM address derivation to properly support P2WPKH with `btcAddressByte`
+
+**Reference Implementation**: 
+- [MIDL-JS getEVMAddress.ts](https://github.com/midl-xyz/midl-js/blob/next/packages/executor/src/utils/getEVMAddress.ts#L10)
+
+**Test Data for Validation**:
+```
+EVM Address: 0x77E84dc90d34CC292E3A558310FE1fa40abAD0ca
+BTC Address: bcrt1qarjm3c8stzh748498wcu6qk0qzfsn7s86qs4nk
+btcAddressByte: 02
+public_key: 25c757e139e37b46769e45fed93d361587492c2fb8b70c70877772b8a4028751
+```
+
 ### Data Flow and Relationships
 
 1. **Bitcoin Integration**: The `btc_tx_hash`, `public_key`, and `btc_address_byte` are synced from Bitcoin mempool
