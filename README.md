@@ -33,7 +33,7 @@ See the [project documentation](https://docs.blockscout.com/) for instructions:
 - [Kubernetes deployment](https://docs.blockscout.com/for-developers/deployment/kubernetes-deployment)
 - [Manual deployment (backend + old UI)](https://docs.blockscout.com/for-developers/deployment/manual-old-ui)
 - [Ansible deployment](https://docs.blockscout.com/for-developers/ansible-deployment)
-- [ENV variables](https://docs.blockscout.com/for-developers/information-and-settings/env-variables)
+- [ENV variables](https://docs.blockscout.com/setup/env-variables)
 - [Configuration options](https://docs.blockscout.com/for-developers/configuration-options)
 
 ## Acknowledgements
@@ -43,6 +43,82 @@ We would like to thank the EthPrize foundation for their funding support.
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution and pull request protocol. We expect contributors to follow our [code of conduct](CODE_OF_CONDUCT.md) when submitting code or comments.
+
+## MIDL API Transaction Field Mapping
+
+This section documents the mapping between transaction fields returned by the API endpoint `/api/v2/transactions/:transaction_hash_param` and their data sources for MIDL chain type.
+
+### Standard Transaction Fields
+
+| API Field | Source | Description |
+|-----------|--------|-------------|
+| `hash` | `transaction.hash` | Transaction hash on EVM chain |
+| `block_number` | `transaction.block_number` | Block number where transaction was included |
+| `timestamp` | `transaction.block.timestamp` | Block timestamp |
+| `from` | `transaction.from_address` | Sender address on EVM chain |
+| `to` | `transaction.to_address` | Recipient address on EVM chain |
+| `value` | `transaction.value` | Value transferred in wei |
+| `gas_used` | `transaction.gas_used` | Gas consumed by transaction |
+| `gas_price` | `transaction.gas_price` | Gas price in wei |
+| `status` | `transaction.status` | Transaction status (success/failed) |
+| `input` | `transaction.input` | Transaction input data |
+| `nonce` | `transaction.nonce` | Sender account nonce |
+
+### MIDL-Specific Fields
+
+| API Field | Source | Description |
+|-----------|--------|-------------|
+| `btc_dapp_tx` | `transaction.btc_tx_hash` | Bitcoin transaction hash from mempool, first input used as identifier |
+| `btc_from` / `btc_address` | Mempool API | Bitcoin sender address from first input's prevout.scriptpubkey_address via mempool API, fallback to computed from public_key (deprecated) |
+| `public_key` | `transaction.public_key` | Public key from Bitcoin transaction, synced from mempool |
+| `btc_address_byte` | `transaction.btc_address_byte` | Bitcoin address type indicator (0=P2PKH, 1=P2SH, etc.) |
+| `eth_address` | Computed | Ethereum address derived from public_key using EVM address derivation |
+| `intents` | `transaction.intents` | List of transactions referencing the same btc_tx_hash |
+| `completion_tx` | `completion_transaction.completion_tx` | Completion event transaction hash, mapped by btc_dapp_tx |
+| `initiation_tx` | `initiation_transaction.initiation_tx` | Initiation event transaction hash, mapped by btc_dapp_tx |
+| `btc_result_tx` | `committed_send_event.btc_result_tx` | Result Bitcoin transaction from committed event logs, mapped by btc_dapp_tx |
+
+### TODO: Address Calculation Updates for P2WPKH Support
+
+**Issue**: The current `btc_from` / `btc_address` and `eth_address` field calculations need to be updated to properly support P2WPKH (Pay-to-Witness-Public-Key-Hash) format.
+
+**Required Changes**:
+
+1. **BTC Address Calculation for P2WPKH**: 
+   - Concatenate `btcAddressByte` (from transaction fields) + `pubKey`
+   - Pass `"btcAddressByte"+"pubKey"` to BTC address calculation instead of just `pubKey`
+
+2. **EVM Address Calculation**: 
+   - Update EVM address derivation to properly support P2WPKH with `btcAddressByte`
+
+**Reference Implementation**: 
+- [MIDL-JS getEVMAddress.ts](https://github.com/midl-xyz/midl-js/blob/next/packages/executor/src/utils/getEVMAddress.ts#L10)
+
+**Test Data for Validation**:
+```
+EVM Address: 0x77E84dc90d34CC292E3A558310FE1fa40abAD0ca
+BTC Address: bcrt1qarjm3c8stzh748498wcu6qk0qzfsn7s86qs4nk
+btcAddressByte: 02
+public_key: 25c757e139e37b46769e45fed93d361587492c2fb8b70c70877772b8a4028751
+```
+
+### Data Flow and Relationships
+
+1. **Bitcoin Integration**: The `btc_tx_hash`, `public_key`, and `btc_address_byte` are synced from Bitcoin mempool
+2. **Event Processing**: 
+   - Initiation events create `InitiationTransaction` records
+   - Completion events create `CompletionTransaction` records  
+   - Committed send events create `CommittedSentEvent` records
+3. **Address Derivation**: Bitcoin and Ethereum addresses are computed from the public key
+4. **Intent Grouping**: Multiple EVM transactions can reference the same Bitcoin transaction via `btc_tx_hash`
+
+### API Example
+
+```bash
+GET /api/v2/transactions/0x1234...
+```
+
+Returns transaction data with both standard EVM fields and MIDL-specific Bitcoin integration fields.
 
 ## License
 

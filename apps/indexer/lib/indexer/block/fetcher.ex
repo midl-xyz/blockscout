@@ -4,6 +4,7 @@ defmodule Indexer.Block.Fetcher do
   """
 
   use Spandex.Decorators
+  use Utils.CompileTimeEnvHelper, chain_type: [:explorer, :chain_type]
 
   require Logger
 
@@ -16,7 +17,9 @@ defmodule Indexer.Block.Fetcher do
   alias Explorer.Chain.Cache.{Accounts, BlockNumber, Transactions, Uncles}
   alias Explorer.Chain.Filecoin.PendingAddressOperation, as: FilecoinPendingAddressOperation
   alias Explorer.Chain.{Address, Block, Hash, Import, Transaction, Wei}
+  alias Explorer.MicroserviceInterfaces.MultichainSearch
   alias Indexer.Block.Fetcher.Receipts
+  alias Indexer.Fetcher.Arbitrum.MessagesToL2Matcher, as: ArbitrumMessagesToL2Matcher
   alias Indexer.Fetcher.Celo.EpochBlockOperations, as: CeloEpochBlockOperations
   alias Indexer.Fetcher.Celo.EpochLogs, as: CeloEpochLogs
   alias Indexer.Fetcher.CoinBalance.Catchup, as: CoinBalanceCatchup
@@ -24,6 +27,9 @@ defmodule Indexer.Block.Fetcher do
   alias Indexer.Fetcher.Filecoin.AddressInfo, as: FilecoinAddressInfo
   alias Indexer.Fetcher.PolygonZkevm.BridgeL1Tokens, as: PolygonZkevmBridgeL1Tokens
   alias Indexer.Fetcher.TokenInstance.Realtime, as: TokenInstanceRealtime
+  alias Indexer.Util.BtcAddressUtil
+  alias Indexer.Util.EthAddressUtil
+  alias Indexer.Util.MempoolClient
 
   alias Indexer.{Prometheus, TokenBalances, Tracer}
 
@@ -43,6 +49,7 @@ defmodule Indexer.Block.Fetcher do
     Addresses,
     AddressTokenBalances,
     MintTransfers,
+    SignedAuthorizations,
     TokenInstances,
     TokenTransfers,
     TransactionActions
@@ -51,6 +58,8 @@ defmodule Indexer.Block.Fetcher do
   alias Indexer.Transform.Optimism.Withdrawals, as: OptimismWithdrawals
 
   alias Indexer.Transform.PolygonEdge.{DepositExecutes, Withdrawals}
+
+  alias Indexer.Transform.Scroll.L1FeeParams, as: ScrollL1FeeParams
 
   alias Indexer.Transform.Arbitrum.Messaging, as: ArbitrumMessaging
   alias Indexer.Transform.Shibarium.Bridge, as: ShibariumBridge
@@ -137,11 +146,11 @@ defmodule Indexer.Block.Fetcher do
           callback_module: callback_module,
           json_rpc_named_arguments: json_rpc_named_arguments
         } = state,
-        _.._ = range,
+        _.._//_ = range,
         additional_options \\ %{}
       )
       when callback_module != nil do
-    {fetch_time, fetched_blocks} =
+    {fetch_time, fetch_result} =
       :timer.tc(fn -> EthereumJSONRPC.fetch_blocks_by_range(range, json_rpc_named_arguments) end)
 
     with {:blocks,
@@ -152,13 +161,13 @@ defmodule Indexer.Block.Fetcher do
              withdrawals_params: withdrawals_params,
              block_second_degree_relations_params: block_second_degree_relations_params,
              errors: blocks_errors
-           }}} <- {:blocks, fetched_blocks},
+           } = fetched_blocks}} <- {:blocks, fetch_result},
          blocks = TransformBlocks.transform_blocks(blocks_params),
          {:receipts, {:ok, receipt_params}} <- {:receipts, Receipts.fetch(state, transactions_params_without_receipts)},
          %{logs: receipt_logs, receipts: receipts} = receipt_params,
          transactions_with_receipts = Receipts.put(transactions_params_without_receipts, receipts),
          celo_epoch_logs = CeloEpochLogs.fetch(blocks, json_rpc_named_arguments),
-         logs = receipt_logs ++ celo_epoch_logs,
+         logs = maybe_set_new_log_index(receipt_logs) ++ celo_epoch_logs,
          %{token_transfers: token_transfers, tokens: tokens} = TokenTransfers.parse(logs),
          %{token_transfers: celo_native_token_transfers, tokens: celo_tokens} =
            CeloTransactionTokenTransfers.parse_transactions(transactions_with_receipts),
@@ -166,6 +175,9 @@ defmodule Indexer.Block.Fetcher do
          token_transfers = token_transfers ++ celo_native_token_transfers,
          tokens = Enum.uniq(tokens ++ celo_tokens),
          %{transaction_actions: transaction_actions} = TransactionActions.parse(logs),
+         committed_sent_events = Indexer.Transform.CommittedSentEvent.parse(logs),
+         initiation_txs = Indexer.Transform.InitiationTransaction.parse(logs),
+         completion_txs = Indexer.Transform.CompletionTransaction.parse(logs, transactions_with_receipts),
          %{mint_transfers: mint_transfers} = MintTransfers.parse(logs),
          optimism_withdrawals =
            if(callback_module == Indexer.Block.Realtime.Fetcher, do: OptimismWithdrawals.parse(logs), else: []),
@@ -174,6 +186,11 @@ defmodule Indexer.Block.Fetcher do
          polygon_edge_deposit_executes =
            if(callback_module == Indexer.Block.Realtime.Fetcher,
              do: DepositExecutes.parse(logs),
+             else: []
+           ),
+         scroll_l1_fee_params =
+           if(callback_module == Indexer.Block.Realtime.Fetcher,
+             do: ScrollL1FeeParams.parse(logs),
              else: []
            ),
          shibarium_bridge_operations =
@@ -186,7 +203,8 @@ defmodule Indexer.Block.Fetcher do
              do: PolygonZkevmBridge.parse(blocks, logs),
              else: []
            ),
-         arbitrum_xlevel_messages = ArbitrumMessaging.parse(transactions_with_receipts, logs),
+         {arbitrum_xlevel_messages, arbitrum_transactions_for_further_handling} =
+           ArbitrumMessaging.parse(transactions_with_receipts, logs),
          %FetchedBeneficiaries{params_set: beneficiary_params_set, errors: beneficiaries_errors} =
            fetch_beneficiaries(blocks, transactions_with_receipts, json_rpc_named_arguments),
          addresses =
@@ -234,30 +252,34 @@ defmodule Indexer.Block.Fetcher do
            tokens: %{params: tokens},
            transactions: %{params: transactions_with_receipts},
            withdrawals: %{params: withdrawals_params},
-           token_instances: %{params: token_instances}
+           token_instances: %{params: token_instances},
+           signed_authorizations: %{params: SignedAuthorizations.parse(transactions_with_receipts)}
          },
-         chain_type_import_options = %{
-           transactions_with_receipts: transactions_with_receipts,
-           optimism_withdrawals: optimism_withdrawals,
-           polygon_edge_withdrawals: polygon_edge_withdrawals,
-           polygon_edge_deposit_executes: polygon_edge_deposit_executes,
-           polygon_zkevm_bridge_operations: polygon_zkevm_bridge_operations,
-           shibarium_bridge_operations: shibarium_bridge_operations,
-           celo_gas_tokens: celo_gas_tokens,
-           arbitrum_messages: arbitrum_xlevel_messages
-         },
+         chain_type_import_options =
+           %{
+             transactions_with_receipts: transactions_with_receipts,
+             optimism_withdrawals: optimism_withdrawals,
+             polygon_edge_withdrawals: polygon_edge_withdrawals,
+             polygon_edge_deposit_executes: polygon_edge_deposit_executes,
+             polygon_zkevm_bridge_operations: polygon_zkevm_bridge_operations,
+             scroll_l1_fee_params: scroll_l1_fee_params,
+             shibarium_bridge_operations: shibarium_bridge_operations,
+             celo_gas_tokens: celo_gas_tokens,
+             arbitrum_messages: arbitrum_xlevel_messages
+           }
+           |> extend_with_zilliqa_import_options(fetched_blocks),
          {:ok, inserted} <-
            __MODULE__.import(
              state,
              basic_import_options |> Map.merge(additional_options) |> import_options(chain_type_import_options)
            ),
-         {:tx_actions, {:ok, inserted_tx_actions}} <-
-           {:tx_actions,
+         {:transaction_actions, {:ok, inserted_transaction_actions}} <-
+           {:transaction_actions,
             Chain.import(%{
               transaction_actions: %{params: transaction_actions},
               timeout: :infinity
             })} do
-      inserted = Map.merge(inserted, inserted_tx_actions)
+      inserted = Map.merge(inserted, inserted_transaction_actions)
       Prometheus.Instrumenter.block_batch_fetch(fetch_time, callback_module)
       result = {:ok, %{inserted: inserted, errors: blocks_errors}}
       update_block_cache(inserted[:blocks])
@@ -265,6 +287,18 @@ defmodule Indexer.Block.Fetcher do
       update_addresses_cache(inserted[:addresses])
       update_uncles_cache(inserted[:block_second_degree_relations])
       update_withdrawals_cache(inserted[:withdrawals])
+      update_committed_events(committed_sent_events)
+      update_inititation_txs(initiation_txs)
+      update_completion_txs(completion_txs)
+
+      update_multichain_search_db(%{
+        addresses: inserted[:addresses],
+        blocks: inserted[:blocks],
+        transactions: inserted[:transactions]
+      })
+
+      async_match_arbitrum_messages_to_l2(arbitrum_transactions_for_further_handling)
+
       result
     else
       {step, {:error, reason}} -> {:error, {step, reason}}
@@ -272,41 +306,51 @@ defmodule Indexer.Block.Fetcher do
     end
   end
 
-  defp import_options(basic_import_options, %{
-         transactions_with_receipts: transactions_with_receipts,
-         optimism_withdrawals: optimism_withdrawals,
-         polygon_edge_withdrawals: polygon_edge_withdrawals,
-         polygon_edge_deposit_executes: polygon_edge_deposit_executes,
-         polygon_zkevm_bridge_operations: polygon_zkevm_bridge_operations,
-         shibarium_bridge_operations: shibarium_bridge_operations,
-         celo_gas_tokens: celo_gas_tokens,
-         arbitrum_messages: arbitrum_xlevel_messages
-       }) do
-    case Application.get_env(:explorer, :chain_type) do
-      :ethereum ->
+  case @chain_type do
+    :ethereum ->
+      defp import_options(basic_import_options, %{transactions_with_receipts: transactions_with_receipts}) do
         basic_import_options
         |> Map.put_new(:beacon_blob_transactions, %{
           params: transactions_with_receipts |> Enum.filter(&Map.has_key?(&1, :max_fee_per_blob_gas))
         })
+      end
 
-      :optimism ->
+    :optimism ->
+      defp import_options(basic_import_options, %{optimism_withdrawals: optimism_withdrawals}) do
         basic_import_options
         |> Map.put_new(:optimism_withdrawals, %{params: optimism_withdrawals})
+      end
 
-      :polygon_edge ->
+    :polygon_edge ->
+      defp import_options(basic_import_options, %{
+             polygon_edge_withdrawals: polygon_edge_withdrawals,
+             polygon_edge_deposit_executes: polygon_edge_deposit_executes
+           }) do
         basic_import_options
         |> Map.put_new(:polygon_edge_withdrawals, %{params: polygon_edge_withdrawals})
         |> Map.put_new(:polygon_edge_deposit_executes, %{params: polygon_edge_deposit_executes})
+      end
 
-      :polygon_zkevm ->
+    :polygon_zkevm ->
+      defp import_options(basic_import_options, %{polygon_zkevm_bridge_operations: polygon_zkevm_bridge_operations}) do
         basic_import_options
         |> Map.put_new(:polygon_zkevm_bridge_operations, %{params: polygon_zkevm_bridge_operations})
+      end
 
-      :shibarium ->
+    :scroll ->
+      defp import_options(basic_import_options, %{scroll_l1_fee_params: scroll_l1_fee_params}) do
+        basic_import_options
+        |> Map.put_new(:scroll_l1_fee_params, %{params: scroll_l1_fee_params})
+      end
+
+    :shibarium ->
+      defp import_options(basic_import_options, %{shibarium_bridge_operations: shibarium_bridge_operations}) do
         basic_import_options
         |> Map.put_new(:shibarium_bridge_operations, %{params: shibarium_bridge_operations})
+      end
 
-      :celo ->
+    :celo ->
+      defp import_options(basic_import_options, %{celo_gas_tokens: celo_gas_tokens}) do
         tokens =
           basic_import_options
           |> Map.get(:tokens, %{})
@@ -317,14 +361,151 @@ defmodule Indexer.Block.Fetcher do
           :tokens,
           %{params: (tokens ++ celo_gas_tokens) |> Enum.uniq()}
         )
+      end
 
-      :arbitrum ->
+    :arbitrum ->
+      defp import_options(basic_import_options, %{arbitrum_messages: arbitrum_xlevel_messages}) do
         basic_import_options
         |> Map.put_new(:arbitrum_messages, %{params: arbitrum_xlevel_messages})
+      end
 
-      _ ->
+    :zilliqa ->
+      defp import_options(basic_import_options, %{
+             zilliqa_quorum_certificates: zilliqa_quorum_certificates,
+             zilliqa_aggregate_quorum_certificates: zilliqa_aggregate_quorum_certificates,
+             zilliqa_nested_quorum_certificates: zilliqa_nested_quorum_certificates
+           }) do
         basic_import_options
+        |> Map.put_new(:zilliqa_quorum_certificates, %{params: zilliqa_quorum_certificates})
+        |> Map.put_new(:zilliqa_aggregate_quorum_certificates, %{params: zilliqa_aggregate_quorum_certificates})
+        |> Map.put_new(:zilliqa_nested_quorum_certificates, %{params: zilliqa_nested_quorum_certificates})
+      end
+
+    :midl ->
+      defp import_options(basic_import_options, %{transactions_with_receipts: transactions_with_receipts}) do
+        # 1) Catch MIDL transactions
+        # 2) Compute BTC address if public_key != nil
+        # 3) Just log the result
+        process_midl_transactions(transactions_with_receipts)
+        # Return the unmodified basic_import_options for now
+        basic_import_options
+      end
+
+    _ ->
+      defp import_options(basic_import_options, _) do
+        basic_import_options
+      end
+  end
+
+  defp process_midl_transactions(transactions) when is_list(transactions) do
+    Logger.info("MIDL Fetcher: Starting to process #{length(transactions)} transactions")
+    Enum.each(transactions, fn tx ->
+      if not is_nil(Map.get(tx, :public_key)) do
+        # 1) Prepare the "pubkey_hex"
+        pubkey_hex =
+          tx
+          |> Map.get(:public_key, nil)
+          |> remove_0x_prefix_if_any()
+          || nil
+
+        # 2) Prepare "address_type_str" from btc_address_byte
+        address_type_str =
+          tx
+          |> Map.get(:btc_address_byte, nil)
+          |> remove_0x_prefix_if_any()
+          || "0"
+
+        # 3) Parse address_type
+        address_type =
+          case Integer.parse(address_type_str) do
+            {val, _} -> val
+            :error -> 0
+          end
+
+        # 4) Check if pubkey is empty or all zeroes
+        if not is_nil(pubkey_hex) and not is_zero_64?(pubkey_hex) do
+          Logger.debug("MIDL Fetcher: Processing transaction with pubkey: #{String.slice(pubkey_hex, 0, 10)}... and address_type: #{address_type}")
+
+          # Get BTC addresses from mempool if btc_tx_hash is available, otherwise compute it
+          btc_address =
+            case Map.get(tx, :btc_tx_hash) do
+              nil ->
+                Logger.warning("MIDL Fetcher: No btc_tx_hash found, falling back to computed BTC address for pubkey: #{String.slice(pubkey_hex, 0, 10)}...")
+                computed_address = BtcAddressUtil.compute_btc_address(pubkey_hex, address_type)
+                Logger.debug("MIDL Fetcher: Computed BTC address: #{computed_address}")
+                computed_address
+              btc_tx_hash ->
+                Logger.debug("MIDL Fetcher: Found btc_tx_hash: #{btc_tx_hash}, attempting mempool lookup")
+                clean_btc_tx_hash = remove_0x_prefix_if_any(btc_tx_hash)
+                Logger.debug("MIDL Fetcher: Clean btc_tx_hash: #{clean_btc_tx_hash}")
+
+                case MempoolClient.get_btc_address_from_mempool(clean_btc_tx_hash) do
+                  nil ->
+                    Logger.warning("MIDL Fetcher: Mempool lookup failed for #{clean_btc_tx_hash}, falling back to computed address")
+                    computed_address = BtcAddressUtil.compute_btc_address(pubkey_hex, address_type)
+                    Logger.warning("MIDL Fetcher: Using computed fallback BTC address: #{computed_address} for pubkey: #{String.slice(pubkey_hex, 0, 10)}...")
+                    computed_address
+                  address ->
+                    Logger.debug("MIDL Fetcher: Successfully got BTC address from mempool: #{address}")
+                    address
+                end
+            end
+
+          eth_address = Map.get(tx, :from_address_hash)
+          Logger.debug("MIDL Fetcher: Generated ETH address: #{eth_address}")
+
+          if btc_address && eth_address do
+            Logger.debug("MIDL Fetcher: Inserting address mapping - BTC: #{btc_address}, ETH: #{eth_address}, Pubkey: #{String.slice(pubkey_hex, 0, 10)}...")
+            Explorer.Chain.insert_addresses_map(pubkey_hex, btc_address, eth_address)
+          else
+            Logger.warning("MIDL Fetcher: Failed to generate valid addresses - BTC: #{inspect(btc_address)}, ETH: #{inspect(eth_address)}")
+          end
+
+        end
+      end
+    end)
+  end
+
+  defp process_midl_transactions(_), do: :ok
+
+  defp is_zero_64?(str) when is_binary(str) do
+    String.length(str) == 64 and String.match?(str, ~r/^[0]+$/)
+  end
+
+  def remove_0x_prefix_if_any(nil), do: nil
+
+  @doc """
+    Midl RPC returns BTC parameters: `btc_tx_hash`, `public_key`, `btc_address_byte` with 0x prefix.
+    That is not consistent with the rest of the system, so we remove the prefix here.
+
+    The solution is temporary. Prefix should be cleaned on the RPC side or saving to DB side.
+  """
+  def remove_0x_prefix_if_any(%Explorer.Chain.Hash{} = hash_struct) do
+    # Convert the hash struct to a string, e.g. "0x9e48a19b..."
+    hashed_string = Explorer.Chain.Hash.to_string(hash_struct)
+
+    # If it starts with "0x", remove that prefix
+    case hashed_string do
+      "0x" <> rest -> rest
+      other -> other
     end
+  end
+
+  def remove_0x_prefix_if_any(str) when is_binary(str) do
+    if String.starts_with?(str, "0x") do
+      String.slice(str, 2..-1//1)
+    else
+      str
+    end
+  end
+
+  defp extend_with_zilliqa_import_options(chain_type_import_options, fetched_blocks) do
+    chain_type_import_options
+    |> Map.merge(%{
+      zilliqa_quorum_certificates: Map.get(fetched_blocks, :zilliqa_quorum_certificates_params, []),
+      zilliqa_aggregate_quorum_certificates: Map.get(fetched_blocks, :zilliqa_aggregate_quorum_certificates_params, []),
+      zilliqa_nested_quorum_certificates: Map.get(fetched_blocks, :zilliqa_nested_quorum_certificates_params, [])
+    })
   end
 
   defp update_block_cache([]), do: :ok
@@ -354,8 +535,76 @@ defmodule Indexer.Block.Fetcher do
     Chain.upsert_count_withdrawals(index)
   end
 
+  defp update_committed_events(committed_events) do
+    Enum.each(committed_events, fn event ->
+      btc_dapp_tx = Map.get(event, :btc_dapp_tx)
+      committed_event_tx = Map.get(event, :committed_event_tx)
+      btc_result_tx = Map.get(event, :btc_result_tx)
+      receiver = Map.get(event, :receiver)
+
+      if receiver do
+        case Explorer.Chain.insert_committed_sent_event(btc_dapp_tx, committed_event_tx, btc_result_tx, receiver) do
+          {:ok, _result} ->
+            :ok
+
+          {:error, reason} ->
+            Logger.error("Failed to insert CommittedSentEvent: #{inspect(reason)}")
+        end
+      else
+        Logger.error("Missing receiver in CommittedSentEvent: #{inspect(event)}")
+      end
+    end)
+  end
+
+  defp update_inititation_txs(initiation_txs) when is_map(initiation_txs) do
+    update_inititation_txs([initiation_txs])
+  end
+
+  defp update_inititation_txs(initiation_txs) when is_list(initiation_txs) do
+    Enum.each(initiation_txs, fn %{
+            btc_dapp_tx: btc_dapp_tx,
+            initiation_tx: initiation_tx
+          } ->
+      case Explorer.Chain.insert_initiantion_tx(btc_dapp_tx, initiation_tx) do
+        {:ok, _result} -> :ok
+        {:error, reason} -> Logger.error("Failed to insert Initiation TX: #{inspect(reason)}")
+      end
+    end)
+  end
+
+  defp update_completion_txs(completion_txs) when is_map(completion_txs) do
+    update_completion_txs([completion_txs])
+  end
+
+  defp update_completion_txs(completion_txs) when is_list(completion_txs) do
+    Enum.each(completion_txs, fn event ->
+      btc_dapp_tx = Map.get(event, :btc_dapp_tx)
+      completion_tx = Map.get(event, :completion_tx)
+      sender = Map.get(event, :sender)
+
+      if sender do
+        case Explorer.Chain.insert_completion_tx(btc_dapp_tx, completion_tx, sender) do
+          {:ok, _result} ->
+            :ok
+          {:error, reason} ->
+            Logger.error("Failed to insert Completion TRX: #{inspect(reason)}")
+        end
+      else
+        Logger.error("Missing sender in CompletionTransaction: #{inspect(event)}")
+      end
+    end)
+  end
+
   defp update_withdrawals_cache(_) do
     :ok
+  end
+
+  defp update_multichain_search_db(%{addresses: addresses, blocks: blocks, transactions: transactions}) do
+    MultichainSearch.batch_import(%{
+      addresses: addresses || [],
+      blocks: blocks || [],
+      transactions: transactions || []
+    })
   end
 
   def import(
@@ -439,9 +688,17 @@ defmodule Indexer.Block.Fetcher do
         block_number: block_number,
         hash: hash,
         created_contract_address_hash: %Hash{} = created_contract_address_hash,
-        created_contract_code_indexed_at: nil
+        created_contract_code_indexed_at: nil,
+        type: type
       } ->
-        [%{block_number: block_number, hash: hash, created_contract_address_hash: created_contract_address_hash}]
+        [
+          %{
+            block_number: block_number,
+            hash: hash,
+            created_contract_address_hash: created_contract_address_hash,
+            type: type
+          }
+        ]
 
       %Transaction{created_contract_address_hash: nil} ->
         []
@@ -738,5 +995,31 @@ defmodule Indexer.Block.Fetcher do
 
       Map.put(token_transfer, :token, token)
     end)
+  end
+
+  # Asynchronously schedules matching of Arbitrum L1-to-L2 messages where the message ID is hashed.
+  @spec async_match_arbitrum_messages_to_l2([map()]) :: :ok
+  defp async_match_arbitrum_messages_to_l2([]), do: :ok
+
+  defp async_match_arbitrum_messages_to_l2(transactions_with_messages_from_l1) do
+    ArbitrumMessagesToL2Matcher.async_discover_match(transactions_with_messages_from_l1)
+  end
+
+  # workaround for cases when RPC send logs with same index within one block
+  defp maybe_set_new_log_index(logs) do
+    logs
+    |> Enum.group_by(& &1.block_hash)
+    |> Enum.map(fn {block_hash, logs_per_block} ->
+      if logs_per_block |> Enum.frequencies_by(& &1.index) |> Map.values() |> Enum.max() == 1 do
+        logs_per_block
+      else
+        Logger.error("Found logs with same index within one block: #{block_hash}")
+
+        logs_per_block
+        |> Enum.sort_by(&{&1.transaction_index, &1.index, &1.transaction_hash})
+        |> Enum.with_index(&%{&1 | index: &2})
+      end
+    end)
+    |> List.flatten()
   end
 end
